@@ -1,0 +1,21 @@
+terraform {
+  required_providers {
+    clickhousedbops = {
+      version = "${CLICKHOUSE_TERRAFORM_PROVIDER_VERSION}"
+      source  = "ClickHouse/clickhousedbops"
+    }
+  }
+}
+
+provider "clickhousedbops" {
+  host = "localhost"
+
+  protocol = "native"
+  port = 9000
+
+  auth_config = {
+    strategy = "password"
+    username = "default"
+    password = "changeme"
+  }
+}

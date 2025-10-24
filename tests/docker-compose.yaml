@@ -1,0 +1,69 @@
+services:
+  zookeeper:
+    image: zookeeper:3.4.9
+    environment:
+      - TZ=Europe/Rome
+      - ZOO_MY_ID=1
+
+  clickhouse:
+    image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
+    user: '101:101'
+    deploy:
+      mode: replicated
+      replicas: ${REPLICAS:-2}
+      endpoint_mode: dnsrr
+    healthcheck:
+      test: [ "CMD", "wget", "http://localhost:8123", "-O", "/dev/null" ]
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+      start_interval: 5s
+    depends_on:
+      - zookeeper
+    environment:
+      - CLICKHOUSE_SKIP_USER_SETUP=1
+    volumes:
+      - type: 'bind'
+        source: './${CONFIGFILE:-config-localfile.xml}'
+        target: '/etc/clickhouse-server/config.xml'
+
+  # Used by acceptance tests to reach the clickhouse service via HTTP on localhost.
+  proxy_http:
+    image: alpine/socat
+    ports:
+      - "8123:8123"
+    command: "tcp-listen:8123,fork,reuseaddr tcp-connect:tests-clickhouse-1:8123"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+  # Used by acceptance tests to reach the clickhouse service with native protocol on localhost.
+  proxy_native:
+    image: alpine/socat
+    ports:
+      - "9000:9000"
+    command: "tcp-listen:9000,fork,reuseaddr tcp-connect:tests-clickhouse-1:9000"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+  # Used by e2e tests to run terraform using a specific version of the CLI
+  shell:
+    image: ${TFIMG:-hashicorp/terraform}:${TFVER:-1.11}
+    entrypoint: [ "sleep" ]
+    command: ["infinity"]
+    working_dir: /tests
+    stop_signal: SIGKILL
+    environment:
+      - TF_LOG=debug
+      - TF_VAR_host=dev-db-kilo-01.core-dba.kilo.infr.host
+      - TF_VAR_cluster_name
+      - TF_VAR_auth_strategy=password
+      - TF_VAR_username=teleport_admin
+      - TF_VAR_password="8===o"
+      - TF_VAR_protocol=native
+      - TF_VAR_port=9000
+    volumes:
+      - ${PWD}/../examples/tests:/tests
+      - ${PWD}/../terraform-provider-clickhousedbops:/tmp/terraform-provider-clickhousedbops/terraform-provider-clickhousedbops
+      - ${PWD}/terraformrc:/root/.terraformrc
