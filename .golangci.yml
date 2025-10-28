@@ -14,7 +14,6 @@ linters:
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
     - unused
     - gosec
     - revive
@@ -32,7 +31,7 @@ linters-settings:
         disabled: true
   gosec:
     excludes:
-      - G402 # Allow configurable InsecureSkipVerify in provider
+      - G402
   gocritic:
     disabled-checks:
       - ifElseChain
