@@ -21,4 +21,6 @@ issues:
   max-same-issues: 0
 
 output:
-  sort-results: true
+  sort-order:
+    - linter
+    - file
