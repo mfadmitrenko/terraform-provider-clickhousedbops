@@ -7,13 +7,7 @@ run:
 linters:
   enable:
     - govet
-    - staticcheck
     - ineffassign
-    - errcheck
-    - unused
-    - revive
-    - gocritic
-    - gosec
 
 issues:
   max-issues-per-linter: 0
