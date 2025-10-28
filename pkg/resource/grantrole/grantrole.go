@@ -2,7 +2,9 @@ package grantrole
 
 import (
 	"context"
+	"crypto/sha1"
 	_ "embed"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -48,6 +50,10 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+			},
+			"id": schema.StringAttribute{
+				Computed:    true,
+				Description: "Synthetic ID for the grant (cluster/role/grantee/admin_option).",
 			},
 			"role_name": schema.StringAttribute{
 				Required:    true,
@@ -140,6 +146,32 @@ func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, _
 	r.client = req.ProviderData.(dbops.Client)
 }
 
+func makeGrantID(cluster *string, role string, user *string, granteeRole *string, admin bool) types.String {
+	parts := []byte{}
+	if cluster != nil {
+		parts = append(parts, []byte(*cluster)...)
+	}
+	parts = append(parts, '|')
+	parts = append(parts, []byte("role:")...)
+	parts = append(parts, []byte(role)...)
+	parts = append(parts, '|')
+	if user != nil {
+		parts = append(parts, []byte("user:")...)
+		parts = append(parts, []byte(*user)...)
+	} else if granteeRole != nil {
+		parts = append(parts, []byte("grantee_role:")...)
+		parts = append(parts, []byte(*granteeRole)...)
+	}
+	parts = append(parts, '|')
+	if admin {
+		parts = append(parts, '1')
+	} else {
+		parts = append(parts, '0')
+	}
+	sum := sha1.Sum(parts)
+	return types.StringValue(hex.EncodeToString(sum[:]))
+}
+
 func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan GrantRole
 	diags := req.Plan.Get(ctx, &plan)
@@ -157,10 +189,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 
 	createdGrant, err := r.client.GrantRole(ctx, grant, plan.ClusterName.ValueStringPointer())
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error Creating ClickHouse Role Grant",
-			fmt.Sprintf("%+v\n", err),
-		)
+		resp.Diagnostics.AddError("Error Creating ClickHouse Role Grant", fmt.Sprintf("%+v\n", err))
 		return
 	}
 
@@ -171,12 +200,10 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		GranteeRoleName: types.StringPointerValue(createdGrant.GranteeRoleName),
 		AdminOption:     types.BoolValue(createdGrant.AdminOption),
 	}
+	state.ID = makeGrantID(state.ClusterName.ValueStringPointer(), state.RoleName.ValueString(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer(), state.AdminOption.ValueBool())
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
 }
 
 func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -189,24 +216,23 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 
 	grant, err := r.client.GetGrantRole(ctx, state.RoleName.ValueString(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer(), state.ClusterName.ValueStringPointer())
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error Reading ClickHouse Role Grant",
-			fmt.Sprintf("%+v\n", err),
-		)
+		resp.Diagnostics.AddError("Error Reading ClickHouse Role Grant", fmt.Sprintf("%+v\n", err))
 		return
 	}
 
-	if grant != nil {
-		state.RoleName = types.StringValue(grant.RoleName)
-		state.GranteeUserName = types.StringPointerValue(grant.GranteeUserName)
-		state.GranteeRoleName = types.StringPointerValue(grant.GranteeRoleName)
-		state.AdminOption = types.BoolValue(grant.AdminOption)
-
-		diags = resp.State.Set(ctx, &state)
-		resp.Diagnostics.Append(diags...)
-	} else {
+	if grant == nil {
 		resp.State.RemoveResource(ctx)
+		return
 	}
+
+	state.RoleName = types.StringValue(grant.RoleName)
+	state.GranteeUserName = types.StringPointerValue(grant.GranteeUserName)
+	state.GranteeRoleName = types.StringPointerValue(grant.GranteeRoleName)
+	state.AdminOption = types.BoolValue(grant.AdminOption)
+	state.ID = makeGrantID(state.ClusterName.ValueStringPointer(), state.RoleName.ValueString(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer(), state.AdminOption.ValueBool())
+
+	diags = resp.State.Set(ctx, state)
+	resp.Diagnostics.Append(diags...)
 }
 
 func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
