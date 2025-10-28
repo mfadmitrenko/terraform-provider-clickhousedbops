@@ -1,3 +1,12 @@
+version: 2
+
+run:
+  timeout: 5m
+  tests: true
+
+issues:
+  exclude-use-default: false
+
 linters:
   enable:
     - errcheck
@@ -6,21 +15,28 @@ linters:
     - ineffassign
     - staticcheck
     - typecheck
+    - unused
     - gosec
-    - unconvert
-    - goconst
-    - goimports
-    - copyloopvar
-    - gofumpt
+    - revive
+    - gocritic
+  disable:
+    - depguard
 
 linters-settings:
-  goimports:
-    # Put imports beginning with prefix after 3rd-party packages.
-    # It's a comma-separated list of prefixes.
-    autofix: true
-    local-prefixes: github.com/ClickHouse/terraform-provider-clickhousedbops
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
+      - name: if-return
+        disabled: true
+  gosec:
+    excludes:
+      - G402 # Insecure TLS config (we knowingly allow InsecureSkipVerify via provider option)
+  gocritic:
+    disabled-checks:
+      - ifElseChain
 
-run:
-  timeout: 10m
-  skip-dirs:
-  skip-dirs-default: true
+output:
+  formats:
+    - format: colored-line-number
