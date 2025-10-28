@@ -32,11 +32,12 @@ linters-settings:
         disabled: true
   gosec:
     excludes:
-      - G402 # Insecure TLS config (we knowingly allow InsecureSkipVerify via provider option)
+      - G402 # Allow configurable InsecureSkipVerify in provider
   gocritic:
     disabled-checks:
       - ifElseChain
 
 output:
-  formats:
-    - format: colored-line-number
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
