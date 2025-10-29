@@ -78,15 +78,23 @@ func (q *alterUserQueryBuilder) Build() (string, error) {
 
 	tokens = append(tokens, backtick(q.resourceName))
 
+	if q.newName != nil && *q.newName != q.resourceName {
+		anyChanges = true
+		tokens = append(tokens, "RENAME", "TO", backtick(*q.newName))
+	}
+
 	// ON CLUSTER must come right after the object name
 	if q.clusterName != nil {
 		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
 	}
 
-	// ONLY legacy clause we need for 23.4:
-	if q.setSettingsProfile != nil {
+	if q.oldSettingsProfile != nil && (q.newSettingsProfile == nil || *q.oldSettingsProfile != *q.newSettingsProfile) {
 		anyChanges = true
-		tokens = append(tokens, "SETTINGS", "PROFILE", backtick(*q.setSettingsProfile))
+		tokens = append(tokens, "DROP", "PROFILES", quote(*q.oldSettingsProfile))
+	}
+	if q.newSettingsProfile != nil && (q.oldSettingsProfile == nil || *q.newSettingsProfile != *q.oldSettingsProfile) {
+		anyChanges = true
+		tokens = append(tokens, "ADD", "PROFILES", quote(*q.newSettingsProfile))
 	}
 
 	if !anyChanges {

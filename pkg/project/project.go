@@ -1,7 +1,7 @@
 package project
 
 var (
-	version = "local-dev"
+	version = "1.1.0"
 	commit  = "dirty"
 )
 

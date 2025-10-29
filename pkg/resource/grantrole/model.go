@@ -6,6 +6,7 @@ import (
 
 type GrantRole struct {
 	ClusterName     types.String `tfsdk:"cluster_name"`
+	ID              types.String `tfsdk:"id"`
 	RoleName        types.String `tfsdk:"role_name"`
 	GranteeUserName types.String `tfsdk:"grantee_user_name"`
 	GranteeRoleName types.String `tfsdk:"grantee_role_name"`

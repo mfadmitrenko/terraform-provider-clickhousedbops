@@ -116,8 +116,8 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 
-	passSet := !(plan.PasswordSha256Hash.IsNull() || plan.PasswordSha256Hash.IsUnknown())
-	cnSet := !(plan.SSLCertificateCN.IsNull() || plan.SSLCertificateCN.IsUnknown())
+	passSet := !plan.PasswordSha256Hash.IsNull() && !plan.PasswordSha256Hash.IsUnknown()
+	cnSet := !plan.SSLCertificateCN.IsNull() && !plan.SSLCertificateCN.IsUnknown()
 
 	if (passSet && cnSet) || (!passSet && !cnSet) {
 		resp.Diagnostics.AddAttributeError(

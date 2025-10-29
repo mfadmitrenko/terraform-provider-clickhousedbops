@@ -19,7 +19,7 @@ func Test_createuser(t *testing.T) {
 		{
 			name:         "Create user no auth",
 			resourceName: "john",
-			want:         "CREATE USER `john`;",
+			want:         "CREATE USER IF NOT EXISTS `john`;",
 			wantErr:      false,
 		},
 		{
@@ -27,14 +27,14 @@ func Test_createuser(t *testing.T) {
 			resourceName:   "john",
 			identifiedWith: IdentificationSHA256Hash,
 			identifiedBy:   "blah",
-			want:           "CREATE USER `john` IDENTIFIED WITH sha256_hash BY 'blah';",
+			want:           "CREATE USER IF NOT EXISTS `john` IDENTIFIED WITH sha256_hash BY 'blah';",
 			wantErr:        false,
 		},
 		{
 			name:         "Create user with SSL CN",
 			resourceName: "test",
 			sslCN:        "test",
-			want:         "CREATE USER `test` IDENTIFIED WITH ssl_certificate CN 'test';",
+			want:         "CREATE USER IF NOT EXISTS `test` IDENTIFIED WITH ssl_certificate CN 'test';",
 			wantErr:      false,
 		},
 		{
@@ -42,8 +42,8 @@ func Test_createuser(t *testing.T) {
 			resourceName: "test",
 			clusterName:  "dev_cluster",
 			sslCN:        "test",
-			defaultRole:  "teleport_reader",
-			want:         "CREATE USER `test` ON CLUSTER 'dev_cluster' IDENTIFIED WITH ssl_certificate CN 'test' DEFAULT ROLE 'reader';",
+			defaultRole:  "reader",
+			want:         "CREATE USER IF NOT EXISTS `test` ON CLUSTER 'dev_cluster' IDENTIFIED WITH ssl_certificate CN 'test' DEFAULT ROLE 'reader';",
 			wantErr:      false,
 		},
 	}

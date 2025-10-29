@@ -78,14 +78,24 @@ func (q *alterRoleQueryBuilder) Build() (string, error) {
 
 	tokens = append(tokens, backtick(q.resourceName))
 
+	// RENAME TO
+	if q.newName != nil && *q.newName != q.resourceName {
+		anyChanges = true
+		tokens = append(tokens, "RENAME", "TO", backtick(*q.newName))
+	}
+
 	if q.clusterName != nil {
 		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
 	}
 
-	// ONLY legacy clause we need for 23.4:
-	if q.setSettingsProfile != nil {
+	// Profiles
+	if q.oldSettingsProfile != nil && (q.newSettingsProfile == nil || *q.oldSettingsProfile != *q.newSettingsProfile) {
 		anyChanges = true
-		tokens = append(tokens, "SETTINGS", "PROFILE", backtick(*q.setSettingsProfile))
+		tokens = append(tokens, "DROP", "PROFILES", quote(*q.oldSettingsProfile))
+	}
+	if q.newSettingsProfile != nil && (q.oldSettingsProfile == nil || *q.newSettingsProfile != *q.oldSettingsProfile) {
+		anyChanges = true
+		tokens = append(tokens, "ADD", "PROFILE", quote(*q.newSettingsProfile))
 	}
 
 	if !anyChanges {

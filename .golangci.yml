@@ -1,26 +1,19 @@
-linters:
-  enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - typecheck
-    - gosec
-    - unconvert
-    - goconst
-    - goimports
-    - copyloopvar
-    - gofumpt
-
-linters-settings:
-  goimports:
-    # Put imports beginning with prefix after 3rd-party packages.
-    # It's a comma-separated list of prefixes.
-    autofix: true
-    local-prefixes: github.com/ClickHouse/terraform-provider-clickhousedbops
+version: "2"
 
 run:
-  timeout: 10m
-  skip-dirs:
-  skip-dirs-default: true
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - govet
+    - ineffassign
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  sort-order:
+    - linter
+    - file

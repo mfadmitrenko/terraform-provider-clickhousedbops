@@ -116,6 +116,8 @@ func (i *impl) GetUser(ctx context.Context, id string, clusterName *string) (*Us
 			return nil, errors.WithMessage(err, "error running query")
 		}
 
+		// Keep profiles if needed in future (currently not returned to callers)
+		user.SettingsProfiles = profiles
 	}
 
 	return user, nil
@@ -167,6 +169,11 @@ func (i *impl) FindUserByName(ctx context.Context, name string, clusterName *str
 	})
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running query")
+	}
+
+	// No user with such name found.
+	if uuid == "" {
+		return nil, nil
 	}
 
 	return i.GetUser(ctx, uuid, clusterName)
