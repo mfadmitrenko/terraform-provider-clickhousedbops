@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
@@ -17,6 +18,13 @@ const (
 	resourceType = "clickhousedbops_user"
 	resourceName = "foo"
 )
+
+func getUserByRef(ctx context.Context, c dbops.Client, ref string, clusterName *string) (*dbops.User, error) {
+	if _, parseErr := uuid.Parse(ref); parseErr == nil {
+		return c.GetUserByUUID(ctx, ref, clusterName)
+	}
+	return c.GetUserByName(ctx, ref, clusterName)
+}
 
 func TestUser_acceptance(t *testing.T) {
 	clusterName := "cluster1"
@@ -35,14 +43,12 @@ func TestUser_acceptance(t *testing.T) {
 		if id == nil {
 			return fmt.Errorf("id was nil")
 		}
-
-		user, err := dbopsClient.GetUserByUUID(ctx, id.(string), clusterName)
+		user, err := getUserByRef(ctx, dbopsClient, id.(string), clusterName)
 		if err != nil {
 			return err
 		}
-
 		if user == nil {
-			return fmt.Errorf("user with id %q was not found", id)
+			return fmt.Errorf("user with ref %q was not found", id.(string))
 		}
 
 		// Check state fields are aligned with the user we retrieved from CH.
