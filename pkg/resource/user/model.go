@@ -6,7 +6,7 @@ import (
 
 type User struct {
 	ClusterName               types.String `tfsdk:"cluster_name"`
-	ID                        types.String `tfsdk:"id"`
+	ID                        types.String `tfsdk:"id"` // will hold the username
 	Name                      types.String `tfsdk:"name"`
 	DefaultRole               types.String `tfsdk:"default_role"`
 	SSLCertificateCN          types.String `tfsdk:"ssl_certificate_cn"`

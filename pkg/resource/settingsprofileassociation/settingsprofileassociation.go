@@ -239,7 +239,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 			return
 		}
 	} else if !state.UserID.IsUnknown() && !state.UserID.IsNull() {
-		user, err := r.client.GetUser(ctx, state.UserID.ValueString(), state.ClusterName.ValueStringPointer())
+		user, err := r.client.GetUserByUUID(ctx, state.UserID.ValueString(), state.ClusterName.ValueStringPointer())
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error Getting User",

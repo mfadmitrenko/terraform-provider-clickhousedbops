@@ -3,7 +3,6 @@ package dbops
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/pingcap/errors"
 
@@ -194,7 +193,7 @@ func (i *impl) AssociateSettingsProfile(ctx context.Context, id string, roleId *
 
 		return nil
 	} else if userId != nil {
-		user, err := i.GetUser(ctx, *userId, clusterName)
+		user, err := i.GetUserByUUID(ctx, *userId, clusterName)
 		if err != nil {
 			return errors.WithMessage(err, "Cannot find user")
 		}
@@ -259,7 +258,7 @@ func (i *impl) DisassociateSettingsProfile(ctx context.Context, id string, roleI
 
 		return nil
 	} else if userId != nil {
-		user, err := i.GetUser(ctx, *userId, clusterName)
+		user, err := i.GetUserByUUID(ctx, *userId, clusterName)
 		if err != nil {
 			return errors.WithMessage(err, "Cannot find user")
 		}
@@ -326,13 +325,6 @@ func (i *impl) FindSettingsProfileByName(ctx context.Context, name string, clust
 	return i.GetSettingsProfile(ctx, settingsProfileID, clusterName)
 }
 
-func looksLikeOldParserError(err error) bool {
-	s := strings.ToLower(err.Error())
-	return strings.Contains(s, "code: 62") &&
-		strings.Contains(s, "expected one of: host") &&
-		strings.Contains(s, "profiles")
-}
-
 func (i *impl) GetSettingsProfileByName(ctx context.Context, name string, clusterName *string) (*SettingsProfile, error) {
 	return i.FindSettingsProfileByName(ctx, name, clusterName)
 }
@@ -354,7 +346,7 @@ func (i *impl) AssociateSettingsProfileByName(
 
 	// USER path (legacy, 23.4)
 	if userId != nil && *userId != "" {
-		u, err := i.GetUser(ctx, *userId, clusterName)
+		u, err := i.GetUserByUUID(ctx, *userId, clusterName)
 		if err != nil {
 			return errors.WithMessage(err, "Cannot find user")
 		}

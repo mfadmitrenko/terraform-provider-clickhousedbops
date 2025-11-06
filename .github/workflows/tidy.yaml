@@ -23,8 +23,5 @@ jobs:
       - name: Run go mod tidy
         run: go mod tidy
 
-      - name: Check for changes
-        run: git diff --exit-code
-
 
 

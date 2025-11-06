@@ -54,7 +54,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 			"id": schema.StringAttribute{
 				Computed:    true,
-				Description: "The system-assigned ID for the user",
+				Description: "Stable identifier for the resource; equals the username.",
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -200,7 +200,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 
 	state := User{
 		ClusterName:               plan.ClusterName,
-		ID:                        types.StringValue(createdUser.ID),
+		ID:                        types.StringValue(createdUser.Name),
 		Name:                      types.StringValue(createdUser.Name),
 		DefaultRole:               plan.DefaultRole,
 		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
@@ -220,7 +220,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	user, err := r.client.GetUser(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
+	user, err := r.client.GetUserByName(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading ClickHouse User", fmt.Sprintf("%+v\n", err))
 		return
@@ -267,6 +267,7 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	}
 
 	state.Name = types.StringValue(updated.Name)
+	state.ID = types.StringValue(updated.Name)
 	// keep DefaultRole from plan in state
 	state.DefaultRole = plan.DefaultRole
 	if updated.SSLCertificateCN != "" {
@@ -301,25 +302,27 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 	ref := req.ID
 	var clusterName *string
 	if strings.Contains(req.ID, ":") {
-		clusterName = &strings.Split(req.ID, ":")[0]
-		ref = strings.Split(req.ID, ":")[1]
-	}
-
-	// Check if ref is a UUID
-	if _, err := uuid.Parse(ref); err != nil {
-		// Failed parsing UUID, try importing using the username
-		user, err := r.client.FindUserByName(ctx, ref, clusterName)
-		if err != nil {
-			resp.Diagnostics.AddError("Cannot find user", fmt.Sprintf("%+v\n", err))
-			return
-		}
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), user.ID)...)
-	} else {
-		// User passed a UUID
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), ref)...)
-	}
-
-	if clusterName != nil {
+		parts := strings.SplitN(req.ID, ":", 2)
+		cn := parts[0]
+		ref = parts[1]
+		clusterName = &cn
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
 	}
+	// Check if ref is a UUID
+	if _, err := uuid.Parse(ref); err == nil {
+		user, err := r.client.GetUserByUUID(ctx, ref, clusterName)
+		if err != nil || user == nil {
+			if err != nil {
+				resp.Diagnostics.AddError("Cannot import user by UUID", fmt.Sprintf("%+v\n", err))
+			} else {
+				resp.Diagnostics.AddError("Cannot import user by UUID", "User not found")
+			}
+			return
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), user.Name)...)
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), ref)...)
+
 }
