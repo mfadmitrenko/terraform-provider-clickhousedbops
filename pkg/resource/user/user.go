@@ -116,8 +116,14 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 
-	passSet := !plan.PasswordSha256Hash.IsNull() && !plan.PasswordSha256Hash.IsUnknown()
-	cnSet := !plan.SSLCertificateCN.IsNull() && !plan.SSLCertificateCN.IsUnknown()
+	var cfg User
+	if diags := req.Config.Get(ctx, &cfg); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	passSet := !cfg.PasswordSha256Hash.IsNull() && !cfg.PasswordSha256Hash.IsUnknown()
+	cnSet := !cfg.SSLCertificateCN.IsNull() && !cfg.SSLCertificateCN.IsUnknown()
 
 	if (passSet && cnSet) || (!passSet && !cnSet) {
 		resp.Diagnostics.AddAttributeError(
