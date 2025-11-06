@@ -26,7 +26,7 @@ func TestUser_acceptance(t *testing.T) {
 		if id == "" {
 			return false, fmt.Errorf("id attribute was not set")
 		}
-		user, err := dbopsClient.GetUser(ctx, id, clusterName)
+		user, err := dbopsClient.GetUserByUUID(ctx, id, clusterName)
 		return user != nil, err
 	}
 
@@ -36,7 +36,7 @@ func TestUser_acceptance(t *testing.T) {
 			return fmt.Errorf("id was nil")
 		}
 
-		user, err := dbopsClient.GetUser(ctx, id.(string), clusterName)
+		user, err := dbopsClient.GetUserByUUID(ctx, id.(string), clusterName)
 		if err != nil {
 			return err
 		}

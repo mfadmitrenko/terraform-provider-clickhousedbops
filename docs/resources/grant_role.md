@@ -42,3 +42,7 @@ This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
 - `grantee_role_name` (String) Name of the `role` to grant `role_name` to.
 - `grantee_user_name` (String) Name of the `user` to grant `role_name` to.
+
+### Read-Only
+
+- `id` (String) Synthetic ID for the grant (cluster/role/grantee/admin_option).

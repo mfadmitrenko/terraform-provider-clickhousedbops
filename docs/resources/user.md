@@ -21,16 +21,15 @@ Known limitations:
 ## Example Usage
 
 ```terraform
-resource "clickhousedbops_user" "john_doe" {
-  cluster_name = "dev_cluster"
-  name = "john_doe"
+resource "clickhousedbops_user" "john" {
+  cluster_name = "cluster"
+  name = "john"
   # Option 1: password-based auth
   # password_sha256_hash_wo = sha256("test")
   # password_sha256_hash_wo_version = 4
 
   # Option 2: SSL certificate CN auth (mutually exclusive with password)
-  ssl_certificate_cn = "john_doe"
-  default_role = "reader"
+  ssl_certificate_cn = "john"
 }
 ```
 
@@ -39,22 +38,23 @@ resource "clickhousedbops_user" "john_doe" {
 
 ### Required
 
-> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
-
 - `name` (String) Name of the user
-- `ssl_certificate_cn` (String) CN of the SSL certificate to be used for the user (mutually exclusive with `password_sha256_hash_wo`).
-- `password_sha256_hash_wo` (String) SHA256 hash of the password to be set for the user (mutually exclusive with `ssl_certificate_cn`). Write-only.
-- `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
 
 ### Optional
+
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
+- `default_role` (String) Default role to assign at creation time.
+- `password_sha256_hash_wo` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user (write-only, mutually exclusive with ssl_certificate_cn).
+- `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
+- `ssl_certificate_cn` (String) CN of the SSL certificate to be used for the user (mutually exclusive with password_sha256_hash_wo).
 
 ### Read-Only
 
-- `id` (String) The system-assigned ID for the user
+- `id` (String) Stable identifier for the resource; equals the username.
 
 ## Import
 

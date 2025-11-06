@@ -56,7 +56,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 		}
 
 		if userID != "" {
-			user, err := dbopsClient.GetUser(ctx, userID, clusterName)
+			user, err := dbopsClient.GetUserByUUID(ctx, userID, clusterName)
 			if err != nil {
 				return false, fmt.Errorf("error getting user")
 			}
@@ -120,7 +120,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 		}
 
 		if userID != nil {
-			user, err := dbopsClient.GetUser(ctx, userID.(string), clusterName)
+			user, err := dbopsClient.GetUserByUUID(ctx, userID.(string), clusterName)
 			if err != nil {
 				return err
 			}
