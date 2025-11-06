@@ -34,6 +34,7 @@ runs:
     - shell: bash
       run: |
         chmod +x ./terraform-provider-clickhousedbops
+        rm -f .terraform.lock.hcl
         ls -lah
 
     - shell: bash
@@ -45,7 +46,7 @@ runs:
       shell: bash
       run: |
         cd tests/
-        docker compose exec shell ash -c "cd ${{ inputs.example }} && ${{ inputs.terraform_binary }} apply -auto-approve && ${{ inputs.terraform_binary }} destroy -auto-approve"
+        docker compose exec shell ash -c "cd ${{ inputs.example }} && ${{ inputs.terraform_binary }} init -upgrade && ${{ inputs.terraform_binary }} apply -auto-approve && ${{ inputs.terraform_binary }} destroy -auto-approve"
 
     - name: Stop test env
       if: always()
