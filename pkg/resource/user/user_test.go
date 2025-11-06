@@ -162,7 +162,7 @@ func TestUser_acceptance(t *testing.T) {
 					WithStringAttribute("cluster_name", clusterName).
 					WithStringAttribute("name", uname).
 					WithStringAttribute("ssl_certificate_cn", uname).
-					WithStringAttribute("default_role", "reader").
+					WithStringAttribute("default_role", "foo").
 					Build()
 			}(),
 			ResourceName:       resourceName,
