@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
@@ -18,6 +19,13 @@ const (
 	resourceName = "foo"
 )
 
+func getUserByRef(ctx context.Context, c dbops.Client, ref string, clusterName *string) (*dbops.User, error) {
+	if _, parseErr := uuid.Parse(ref); parseErr == nil {
+		return c.GetUserByUUID(ctx, ref, clusterName)
+	}
+	return c.GetUserByName(ctx, ref, clusterName)
+}
+
 func TestUser_acceptance(t *testing.T) {
 	clusterName := "cluster1"
 
@@ -26,7 +34,7 @@ func TestUser_acceptance(t *testing.T) {
 		if id == "" {
 			return false, fmt.Errorf("id attribute was not set")
 		}
-		user, err := dbopsClient.GetUser(ctx, id, clusterName)
+		user, err := dbopsClient.GetUserByUUID(ctx, id, clusterName)
 		return user != nil, err
 	}
 
@@ -35,25 +43,20 @@ func TestUser_acceptance(t *testing.T) {
 		if id == nil {
 			return fmt.Errorf("id was nil")
 		}
-
-		user, err := dbopsClient.GetUser(ctx, id.(string), clusterName)
+		user, err := getUserByRef(ctx, dbopsClient, id.(string), clusterName)
 		if err != nil {
 			return err
 		}
-
 		if user == nil {
-			return fmt.Errorf("user with id %q was not found", id)
+			return fmt.Errorf("user with ref %q was not found", id.(string))
 		}
 
-		// Check state fields are aligned with the user we retrieved from CH.
 		if attrs["name"].(string) != user.Name {
 			return fmt.Errorf("expected name to be %q, was %q", user.Name, attrs["name"].(string))
 		}
-
 		if !nilcompare.NilCompare(clusterName, attrs["cluster_name"]) {
 			return fmt.Errorf("wrong value for cluster_name attribute")
 		}
-
 		return nil
 	}
 

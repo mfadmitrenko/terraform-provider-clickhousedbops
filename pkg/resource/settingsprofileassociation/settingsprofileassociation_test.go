@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
@@ -56,16 +57,22 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 		}
 
 		if userID != "" {
-			user, err := dbopsClient.GetUser(ctx, userID, clusterName)
-			if err != nil {
-				return false, fmt.Errorf("error getting user")
+			var (
+				user   *dbops.User
+				getErr error
+			)
+			if _, parseErr := uuid.Parse(userID); parseErr == nil {
+				user, getErr = dbopsClient.GetUserByUUID(ctx, userID, clusterName)
+			} else {
+				user, getErr = dbopsClient.GetUserByName(ctx, userID, clusterName)
 			}
-
+			if getErr != nil {
+				return false, fmt.Errorf("error getting user: %w", getErr)
+			}
 			if user == nil {
 				// Desired state
 				return false, nil
 			}
-
 			return user.HasSettingProfile(settingsProfile.Name), nil
 		}
 
@@ -120,17 +127,25 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 		}
 
 		if userID != nil {
-			user, err := dbopsClient.GetUser(ctx, userID.(string), clusterName)
-			if err != nil {
-				return err
-			}
+			userRef := userID.(string)
 
+			var (
+				user   *dbops.User
+				getErr error
+			)
+			if _, parseErr := uuid.Parse(userRef); parseErr == nil {
+				user, getErr = dbopsClient.GetUserByUUID(ctx, userRef, clusterName)
+			} else {
+				user, getErr = dbopsClient.GetUserByName(ctx, userRef, clusterName)
+			}
+			if getErr != nil {
+				return fmt.Errorf("error getting user: %w", getErr)
+			}
 			if user == nil {
-				return fmt.Errorf("user with id %q was not found", userID.(string))
+				return fmt.Errorf("user with ref %q was not found", userRef)
 			}
-
 			if !user.HasSettingProfile(settingsProfile.Name) {
-				return fmt.Errorf("expected user with id %q to have settings profile %q but did not", userID.(string), settingsProfile.Name)
+				return fmt.Errorf("expected user %q to have settings profile %q but did not", userRef, settingsProfile.Name)
 			}
 		}
 

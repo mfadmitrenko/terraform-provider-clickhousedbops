@@ -5,7 +5,7 @@ variable "protocol" {
 
 variable "host" {
   type = string
-  default = "dev-db-kilo-01.core-dba.kilo.infr.host"
+  default = "localhost"
 }
 
 variable "port" {
@@ -20,7 +20,7 @@ variable "auth_strategy" {
 
 variable "username" {
   type = string
-  default = "teleport_admin"
+  default = "default"
 }
 
 variable "password" {

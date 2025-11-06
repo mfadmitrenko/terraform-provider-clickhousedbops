@@ -3,6 +3,7 @@ package dbops
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
@@ -16,6 +17,21 @@ type User struct {
 	DefaultRole        string   `json:"-"`
 	SSLCertificateCN   string   `json:"-"`
 	SettingsProfiles   []string `json:"-"`
+}
+
+func (i *impl) resolveUserName(ctx context.Context, ref string, clusterName *string) (string, error) {
+	if _, err := uuid.Parse(ref); err == nil {
+		u, err := i.GetUserByUUID(ctx, ref, clusterName)
+		if err != nil {
+			return "", err
+		}
+		if u == nil {
+			return "", nil
+		}
+		return u.Name, nil
+	}
+	// Not a UUID → treat as username directly
+	return ref, nil
 }
 
 func (u *User) HasSettingProfile(profileName string) bool {
@@ -54,42 +70,44 @@ func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.FindUserByName(ctx, user.Name, clusterName)
+	return i.GetUserByName(ctx, user.Name, clusterName)
 }
 
-func (i *impl) GetUser(ctx context.Context, id string, clusterName *string) (*User, error) { // nolint:dupl
+func (i *impl) GetUserByName(ctx context.Context, name string, clusterName *string) (*User, error) {
 	sql, err := querybuilder.
-		NewSelect([]querybuilder.Field{querybuilder.NewField("name")}, "system.users").
+		NewSelect([]querybuilder.Field{
+			querybuilder.NewField("name"),
+			querybuilder.NewField("id").ToString(), // optional; for introspection only
+		}, "system.users").
 		WithCluster(clusterName).
-		Where(querybuilder.WhereEquals("id", id)).
+		Where(querybuilder.WhereEquals("name", name)).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
 
 	var user *User
-
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
 		n, err := data.GetString("name")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'name' field")
 		}
-		user = &User{
-			ID:   id,
-			Name: n,
+		chID, _ := data.GetNullableString("id") // may vary across nodes; do not use for identity
+		u := &User{Name: n}
+		if chID != nil {
+			u.ID = *chID
 		}
+		user = u
 		return nil
 	})
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running query")
 	}
-
 	if user == nil {
-		// User not found
-		return nil, nil
+		return nil, nil // not found
 	}
 
-	// Check if user has settings profile associated.
+	// Also fetch settings profiles (unchanged)
 	{
 		sql, err = querybuilder.
 			NewSelect([]querybuilder.Field{querybuilder.NewField("inherit_profile")}, "system.settings_profile_elements").
@@ -106,7 +124,6 @@ func (i *impl) GetUser(ctx context.Context, id string, clusterName *string) (*Us
 			if err != nil {
 				return errors.WithMessage(err, "error scanning query result, missing 'inherit_profile' field")
 			}
-
 			if profile != nil {
 				profiles = append(profiles, *profile)
 			}
@@ -115,90 +132,94 @@ func (i *impl) GetUser(ctx context.Context, id string, clusterName *string) (*Us
 		if err != nil {
 			return nil, errors.WithMessage(err, "error running query")
 		}
-
-		// Keep profiles if needed in future (currently not returned to callers)
 		user.SettingsProfiles = profiles
 	}
 
 	return user, nil
 }
 
-func (i *impl) DeleteUser(ctx context.Context, id string, clusterName *string) error {
-	user, err := i.GetUser(ctx, id, clusterName)
+func (i *impl) GetUserByUUID(ctx context.Context, uuidStr string, clusterName *string) (*User, error) {
+	if _, parseErr := uuid.Parse(uuidStr); parseErr != nil {
+		return i.GetUserByName(ctx, uuidStr, clusterName)
+	}
+
+	sql, err := querybuilder.
+		NewSelect([]querybuilder.Field{querybuilder.NewField("name")}, "system.users").
+		WithCluster(clusterName).
+		Where(querybuilder.WhereEquals("id", uuidStr)).
+		Build()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building query")
+	}
+	var name string
+	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+		n, err := data.GetString("name")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'name' field")
+		}
+		name = n
+		return nil
+	})
+	if err != nil {
+		return nil, errors.WithMessage(err, "error running query")
+	}
+	if name == "" {
+		return nil, nil
+	}
+	return i.GetUserByName(ctx, name, clusterName)
+}
+
+// Delete by name
+func (i *impl) DeleteUser(ctx context.Context, name string, clusterName *string) error {
+	user, err := i.GetUserByName(ctx, name, clusterName)
 	if err != nil {
 		return errors.WithMessage(err, "error getting user")
 	}
-
 	if user == nil {
-		// This is the desired state.
-		return nil
+		return nil // desired state
 	}
 
 	sql, err := querybuilder.NewDropUser(user.Name).WithCluster(clusterName).Build()
 	if err != nil {
 		return errors.WithMessage(err, "error building query")
 	}
-
-	err = i.clickhouseClient.Exec(ctx, sql)
-	if err != nil {
+	if err = i.clickhouseClient.Exec(ctx, sql); err != nil {
 		return errors.WithMessage(err, "error running query")
 	}
-
 	return nil
 }
 
 func (i *impl) FindUserByName(ctx context.Context, name string, clusterName *string) (*User, error) {
-	sql, err := querybuilder.
-		NewSelect([]querybuilder.Field{querybuilder.NewField("id").ToString()}, "system.users").
-		WithCluster(clusterName).
-		Where(querybuilder.WhereEquals("name", name)).
-		Build()
-	if err != nil {
-		return nil, errors.WithMessage(err, "error building query")
-	}
-
-	var uuid string
-
-	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-		uuid, err = data.GetString("id")
-		if err != nil {
-			return errors.WithMessage(err, "error scanning query result, missing 'id' field")
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, errors.WithMessage(err, "error running query")
-	}
-
-	// No user with such name found.
-	if uuid == "" {
-		return nil, nil
-	}
-
-	return i.GetUser(ctx, uuid, clusterName)
+	return i.GetUserByName(ctx, name, clusterName)
 }
 
 func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (*User, error) {
-	// Retrieve current user
-	existing, err := i.GetUser(ctx, user.ID, clusterName)
+	// user.ID now carries the CURRENT NAME from state
+	currentName := user.ID
+	existing, err := i.GetUserByName(ctx, currentName, clusterName)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Unable to get existing user")
 	}
+	if existing == nil {
+		return nil, errors.Errorf("user %q not found", currentName)
+	}
 
-	sql, err := querybuilder.
-		NewAlterUser(existing.Name).
-		WithCluster(clusterName).
-		RenameTo(&user.Name).
-		Build()
+	q := querybuilder.NewAlterUser(existing.Name).WithCluster(clusterName)
+	if user.Name != "" && user.Name != existing.Name {
+		q = q.RenameTo(&user.Name)
+	}
+	sql, err := q.Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
-
-	err = i.clickhouseClient.Exec(ctx, sql)
-	if err != nil {
+	if err = i.clickhouseClient.Exec(ctx, sql); err != nil {
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.GetUser(ctx, user.ID, clusterName)
+	// Return by final name (either new or old)
+	finalName := existing.Name
+	if user.Name != "" {
+		finalName = user.Name
+	}
+	return i.GetUserByName(ctx, finalName, clusterName)
 }

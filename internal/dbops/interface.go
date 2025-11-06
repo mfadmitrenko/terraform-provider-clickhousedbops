@@ -17,7 +17,9 @@ type Client interface {
 	UpdateRole(ctx context.Context, role Role, clusterName *string) (*Role, error)
 
 	CreateUser(ctx context.Context, user User, clusterName *string) (*User, error)
-	GetUser(ctx context.Context, id string, clusterName *string) (*User, error)
+	GetUserByName(ctx context.Context, name string, clusterName *string) (*User, error)
+	resolveUserName(ctx context.Context, name string, clusterName *string) (string, error)
+	GetUserByUUID(ctx context.Context, uuid string, clusterName *string) (*User, error)
 	DeleteUser(ctx context.Context, id string, clusterName *string) error
 	FindUserByName(ctx context.Context, name string, clusterName *string) (*User, error)
 	UpdateUser(ctx context.Context, user User, clusterName *string) (*User, error)
