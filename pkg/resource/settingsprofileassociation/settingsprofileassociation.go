@@ -196,14 +196,20 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		}
 	} else if !state.UserID.IsUnknown() && !state.UserID.IsNull() {
 		ref := state.UserID.ValueString()
-		var user *dbops.User
-		if _, err := uuid.Parse(ref); err == nil {
-			user, err = r.client.GetUserByUUID(ctx, ref, state.ClusterName.ValueStringPointer())
+
+		var (
+			user   *dbops.User
+			getErr error
+		)
+
+		if _, parseErr := uuid.Parse(ref); parseErr == nil {
+			user, getErr = r.client.GetUserByUUID(ctx, ref, state.ClusterName.ValueStringPointer())
 		} else {
-			user, err = r.client.GetUserByName(ctx, ref, state.ClusterName.ValueStringPointer())
+			user, getErr = r.client.GetUserByName(ctx, ref, state.ClusterName.ValueStringPointer())
 		}
-		if err != nil {
-			resp.Diagnostics.AddError("Error Getting User", fmt.Sprintf("%+v\n", err))
+
+		if getErr != nil {
+			resp.Diagnostics.AddError("Error Getting User", fmt.Sprintf("%+v\n", getErr))
 			return
 		}
 		if user == nil || !user.HasSettingProfile(settingsProfile.Name) {

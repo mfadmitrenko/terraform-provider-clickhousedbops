@@ -57,14 +57,17 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 		}
 
 		if userID != "" {
-			var user *dbops.User
-			if _, err := uuid.Parse(userID); err == nil {
-				user, err = dbopsClient.GetUserByUUID(ctx, userID, clusterName)
+			var (
+				user   *dbops.User
+				getErr error
+			)
+			if _, parseErr := uuid.Parse(userID); parseErr == nil {
+				user, getErr = dbopsClient.GetUserByUUID(ctx, userID, clusterName)
 			} else {
-				user, err = dbopsClient.GetUserByName(ctx, userID, clusterName)
+				user, getErr = dbopsClient.GetUserByName(ctx, userID, clusterName)
 			}
-			if err != nil {
-				return false, fmt.Errorf("error getting user: %w", err)
+			if getErr != nil {
+				return false, fmt.Errorf("error getting user: %w", getErr)
 			}
 			if user == nil {
 				// Desired state
@@ -125,14 +128,18 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 
 		if userID != nil {
 			userRef := userID.(string)
-			var user *dbops.User
-			if _, err := uuid.Parse(userRef); err == nil {
-				user, err = dbopsClient.GetUserByUUID(ctx, userRef, clusterName)
+
+			var (
+				user   *dbops.User
+				getErr error
+			)
+			if _, parseErr := uuid.Parse(userRef); parseErr == nil {
+				user, getErr = dbopsClient.GetUserByUUID(ctx, userRef, clusterName)
 			} else {
-				user, err = dbopsClient.GetUserByName(ctx, userRef, clusterName)
+				user, getErr = dbopsClient.GetUserByName(ctx, userRef, clusterName)
 			}
-			if err != nil {
-				return fmt.Errorf("error getting user: %w", err)
+			if getErr != nil {
+				return fmt.Errorf("error getting user: %w", getErr)
 			}
 			if user == nil {
 				return fmt.Errorf("user with ref %q was not found", userRef)
