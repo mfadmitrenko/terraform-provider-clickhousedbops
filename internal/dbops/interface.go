@@ -18,6 +18,7 @@ type Client interface {
 
 	CreateUser(ctx context.Context, user User, clusterName *string) (*User, error)
 	GetUserByName(ctx context.Context, name string, clusterName *string) (*User, error)
+	resolveUserName(ctx context.Context, name string, clusterName *string) (string, error)
 	GetUserByUUID(ctx context.Context, uuid string, clusterName *string) (*User, error)
 	DeleteUser(ctx context.Context, id string, clusterName *string) error
 	FindUserByName(ctx context.Context, name string, clusterName *string) (*User, error)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
@@ -56,16 +57,19 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 		}
 
 		if userID != "" {
-			user, err := dbopsClient.GetUserByUUID(ctx, userID, clusterName)
-			if err != nil {
-				return false, fmt.Errorf("error getting user")
+			var user *dbops.User
+			if _, err := uuid.Parse(userID); err == nil {
+				user, err = dbopsClient.GetUserByUUID(ctx, userID, clusterName)
+			} else {
+				user, err = dbopsClient.GetUserByName(ctx, userID, clusterName)
 			}
-
+			if err != nil {
+				return false, fmt.Errorf("error getting user: %w", err)
+			}
 			if user == nil {
 				// Desired state
 				return false, nil
 			}
-
 			return user.HasSettingProfile(settingsProfile.Name), nil
 		}
 
@@ -120,17 +124,21 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 		}
 
 		if userID != nil {
-			user, err := dbopsClient.GetUserByUUID(ctx, userID.(string), clusterName)
+			userRef := userID.(string)
+			var user *dbops.User
+			if _, err := uuid.Parse(userRef); err == nil {
+				user, err = dbopsClient.GetUserByUUID(ctx, userRef, clusterName)
+			} else {
+				user, err = dbopsClient.GetUserByName(ctx, userRef, clusterName)
+			}
 			if err != nil {
-				return err
+				return fmt.Errorf("error getting user: %w", err)
 			}
-
 			if user == nil {
-				return fmt.Errorf("user with id %q was not found", userID.(string))
+				return fmt.Errorf("user with ref %q was not found", userRef)
 			}
-
 			if !user.HasSettingProfile(settingsProfile.Name) {
-				return fmt.Errorf("expected user with id %q to have settings profile %q but did not", userID.(string), settingsProfile.Name)
+				return fmt.Errorf("expected user %q to have settings profile %q but did not", userRef, settingsProfile.Name)
 			}
 		}
 
@@ -144,7 +152,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
-				WithResourceFieldReference("role_id", "clickhousedbops_role", "role", "id").
+				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "name").
 				AddDependency(role.Build()).
 				AddDependency(settingsProfile.Build()).
 				Build(),
@@ -159,7 +167,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
-				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
+				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "name").
 				AddDependency(user.Build()).
 				AddDependency(settingsProfile.Build()).
 				Build(),
@@ -174,7 +182,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
-				WithResourceFieldReference("role_id", "clickhousedbops_role", "role", "id").
+				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "name").
 				AddDependency(role.Build()).
 				AddDependency(settingsProfile.Build()).
 				Build(),
@@ -189,7 +197,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
-				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
+				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "name").
 				AddDependency(user.Build()).
 				AddDependency(settingsProfile.Build()).
 				Build(),
@@ -205,7 +213,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			Protocol:    "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
-				WithResourceFieldReference("role_id", "clickhousedbops_role", "role", "id").
+				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "name").
 				AddDependency(role.WithStringAttribute("cluster_name", clusterName).Build()).
 				AddDependency(settingsProfile.WithStringAttribute("cluster_name", clusterName).Build()).
 				WithStringAttribute("cluster_name", clusterName).
@@ -222,7 +230,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			Protocol:    "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
-				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
+				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "name").
 				AddDependency(user.WithStringAttribute("cluster_name", clusterName).Build()).
 				AddDependency(settingsProfile.WithStringAttribute("cluster_name", clusterName).Build()).
 				WithStringAttribute("cluster_name", clusterName).

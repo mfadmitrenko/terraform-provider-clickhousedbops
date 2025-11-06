@@ -193,17 +193,16 @@ func (i *impl) AssociateSettingsProfile(ctx context.Context, id string, roleId *
 
 		return nil
 	} else if userId != nil {
-		user, err := i.GetUserByUUID(ctx, *userId, clusterName)
+		user, err := i.resolveUserName(ctx, *userId, clusterName)
 		if err != nil {
-			return errors.WithMessage(err, "Cannot find user")
+			return errors.WithMessage(err, "error resolving user")
 		}
-
-		if user == nil {
-			return errors.New("user not found")
+		if user == "" {
+			return errors.New("Cannot find user")
 		}
 
 		sql, err := querybuilder.
-			NewAlterUser(user.Name).
+			NewAlterUser(user).
 			WithCluster(clusterName).
 			AddSettingsProfile(&profile.Name).
 			Build()
@@ -258,17 +257,16 @@ func (i *impl) DisassociateSettingsProfile(ctx context.Context, id string, roleI
 
 		return nil
 	} else if userId != nil {
-		user, err := i.GetUserByUUID(ctx, *userId, clusterName)
+		user, err := i.resolveUserName(ctx, *userId, clusterName)
 		if err != nil {
-			return errors.WithMessage(err, "Cannot find user")
+			return errors.WithMessage(err, "error resolving user")
 		}
-
-		if user == nil {
-			return errors.New("user not found")
+		if user == "" {
+			return errors.New("Cannot find user")
 		}
 
 		sql, err := querybuilder.
-			NewAlterUser(user.Name).
+			NewAlterUser(user).
 			WithCluster(clusterName).
 			DropSettingsProfile(&profile.Name).
 			Build()
@@ -346,15 +344,15 @@ func (i *impl) AssociateSettingsProfileByName(
 
 	// USER path (legacy, 23.4)
 	if userId != nil && *userId != "" {
-		u, err := i.GetUserByUUID(ctx, *userId, clusterName)
+		u, err := i.resolveUserName(ctx, *userId, clusterName)
 		if err != nil {
-			return errors.WithMessage(err, "Cannot find user")
+			return errors.WithMessage(err, "error resolving user")
 		}
-		if u == nil {
-			return errors.New("user not found")
+		if u == "" {
+			return errors.New("Cannot find user")
 		}
 
-		sqlStr, err := querybuilder.NewAlterUser(u.Name).
+		sqlStr, err := querybuilder.NewAlterUser(u).
 			IfExists().
 			WithCluster(clusterName).
 			SetSettingsProfile(&profileName).

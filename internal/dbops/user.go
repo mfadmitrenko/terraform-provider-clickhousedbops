@@ -3,6 +3,7 @@ package dbops
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
@@ -16,6 +17,21 @@ type User struct {
 	DefaultRole        string   `json:"-"`
 	SSLCertificateCN   string   `json:"-"`
 	SettingsProfiles   []string `json:"-"`
+}
+
+func (i *impl) resolveUserName(ctx context.Context, ref string, clusterName *string) (string, error) {
+	if _, err := uuid.Parse(ref); err == nil {
+		u, err := i.GetUserByUUID(ctx, ref, clusterName)
+		if err != nil {
+			return "", err
+		}
+		if u == nil {
+			return "", nil
+		}
+		return u.Name, nil
+	}
+	// Not a UUID → treat as username directly
+	return ref, nil
 }
 
 func (u *User) HasSettingProfile(profileName string) bool {

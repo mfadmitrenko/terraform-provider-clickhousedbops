@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -194,24 +195,21 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 			return
 		}
 	} else if !state.UserID.IsUnknown() && !state.UserID.IsNull() {
-		user, err := r.client.GetUserByUUID(ctx, state.UserID.ValueString(), state.ClusterName.ValueStringPointer())
+		ref := state.UserID.ValueString()
+		var user *dbops.User
+		if _, err := uuid.Parse(ref); err == nil {
+			user, err = r.client.GetUserByUUID(ctx, ref, state.ClusterName.ValueStringPointer())
+		} else {
+			user, err = r.client.GetUserByName(ctx, ref, state.ClusterName.ValueStringPointer())
+		}
 		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error Getting User",
-				fmt.Sprintf("%+v\n", err),
-			)
-
+			resp.Diagnostics.AddError("Error Getting User", fmt.Sprintf("%+v\n", err))
 			return
 		}
-
 		if user == nil || !user.HasSettingProfile(settingsProfile.Name) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
-	} else {
-		// This should never be the case, but in case it happens we can delete the resource as it would be pointless.
-		resp.State.RemoveResource(ctx)
-		return
 	}
 }
 
