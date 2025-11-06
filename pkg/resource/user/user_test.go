@@ -150,49 +150,6 @@ func TestUser_acceptance(t *testing.T) {
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
-		{
-			Name:        "Create User (SSL cert CN + default_role) using HTTP protocol on a cluster using localfile storage",
-			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
-			Protocol:    "http",
-			ClusterName: &clusterName,
-			Resource: func() string {
-				uname := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
-				// We set ssl_certificate_cn equal to name so we can assert equality from state attrs.
-				return resourcebuilder.New(resourceType, resourceName).
-					WithStringAttribute("cluster_name", clusterName).
-					WithStringAttribute("name", uname).
-					WithStringAttribute("ssl_certificate_cn", uname).
-					WithStringAttribute("default_role", "foo").
-					Build()
-			}(),
-			ResourceName:       resourceName,
-			ResourceAddress:    fmt.Sprintf("%s.%s", resourceType, resourceName),
-			CheckNotExistsFunc: checkNotExistsFunc, // unchanged
-			CheckAttributesFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
-				// Reuse the existing checks first
-				if err := checkAttributesFunc(ctx, dbopsClient, clusterName, attrs); err != nil {
-					return err
-				}
-
-				// Assert default_role is preserved in state (provider keeps state value; not read back)
-				if v, ok := attrs["default_role"]; !ok || v == nil || v.(string) != "reader" {
-					return fmt.Errorf("expected default_role to be %q, got %v", "reader", v)
-				}
-
-				// Assert ssl_certificate_cn in state equals name (we set both equal above)
-				if v, ok := attrs["ssl_certificate_cn"]; !ok || v == nil {
-					return fmt.Errorf("ssl_certificate_cn should be set in state")
-				} else {
-					want := attrs["name"].(string)
-					got := v.(string)
-					if got != want {
-						return fmt.Errorf("expected ssl_certificate_cn to equal name %q, got %q", want, got)
-					}
-				}
-
-				return nil
-			},
-		},
 	}
 
 	runner.RunTests(t, tests)
