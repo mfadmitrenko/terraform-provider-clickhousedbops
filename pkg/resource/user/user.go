@@ -204,13 +204,18 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	sslCN := types.StringNull()
+	if !config.SSLCertificateCN.IsNull() && !config.SSLCertificateCN.IsUnknown() {
+		sslCN = config.SSLCertificateCN // concrete
+	}
+
 	state := User{
 		ClusterName:               plan.ClusterName,
 		ID:                        types.StringValue(createdUser.Name),
 		Name:                      types.StringValue(createdUser.Name),
 		DefaultRole:               plan.DefaultRole,
 		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
-		SSLCertificateCN:          plan.SSLCertificateCN,
+		SSLCertificateCN:          sslCN,
 	}
 
 	if diags := resp.State.Set(ctx, state); diags.HasError() {
@@ -241,6 +246,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	// DEFAULT ROLE is not read back; keep existing state value.
 	if user.SSLCertificateCN != "" {
 		state.SSLCertificateCN = types.StringValue(user.SSLCertificateCN)
+	} else {
+		// Explicitly null—do NOT keep Unknown from earlier plans
+		state.SSLCertificateCN = types.StringNull()
 	}
 
 	if diags := resp.State.Set(ctx, &state); diags.HasError() {
@@ -278,8 +286,10 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	state.DefaultRole = plan.DefaultRole
 	if updated.SSLCertificateCN != "" {
 		state.SSLCertificateCN = types.StringValue(updated.SSLCertificateCN)
-	} else {
+	} else if !plan.SSLCertificateCN.IsNull() && !plan.SSLCertificateCN.IsUnknown() {
 		state.SSLCertificateCN = plan.SSLCertificateCN
+	} else {
+		state.SSLCertificateCN = types.StringNull()
 	}
 
 	if diags := resp.State.Set(ctx, &state); diags.HasError() {
