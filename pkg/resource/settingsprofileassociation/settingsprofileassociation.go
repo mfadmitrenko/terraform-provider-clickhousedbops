@@ -12,7 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 )
@@ -49,27 +48,10 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				},
 			},
 			"settings_profile_id": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "UUID of the settings profile to attach.",
-				Validators: []validator.String{
-					// Exactly one of id or name must be set (the peer validator sits on the name field too)
-					stringvalidator.ExactlyOneOf(path.MatchRoot("settings_profile_name")),
-				},
+				Required:    true,
+				Description: "ID of the settings profile to associate",
 				PlanModifiers: []planmodifier.String{
-					// Prevents unexpected diffs if value is unknown at plan time
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
-			"settings_profile_name": schema.StringAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Name of the settings profile to attach (e.g. 'readonly').",
-				Validators: []validator.String{
-					stringvalidator.ExactlyOneOf(path.MatchRoot("settings_profile_id")),
-				},
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"role_id": schema.StringAttribute{
@@ -148,55 +130,28 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	// Resolve settings profile NAME
-	var profileName string
-	if !plan.SettingsProfileName.IsNull() && !plan.SettingsProfileName.IsUnknown() {
-		profileName = plan.SettingsProfileName.ValueString()
-	} else if !plan.SettingsProfileID.IsNull() && !plan.SettingsProfileID.IsUnknown() {
-		sp, err := r.client.GetSettingsProfile(ctx, plan.SettingsProfileID.ValueString(), plan.ClusterName.ValueStringPointer())
-		if err != nil {
-			resp.Diagnostics.AddError("Error Getting Settings Profile", fmt.Sprintf("%+v\n", err))
-			return
-		}
-		if sp == nil {
-			resp.Diagnostics.AddError("Error Getting Settings Profile", "settings profile not found by id")
-			return
-		}
-		profileName = sp.Name
-	} else {
-		resp.Diagnostics.AddError("Invalid configuration", "either settings_profile_name or settings_profile_id must be set")
-		return
-	}
-
-	// Do the association (by NAME)
-	err := r.client.AssociateSettingsProfileByName(ctx, profileName, plan.RoleID.ValueStringPointer(), plan.UserID.ValueStringPointer(), plan.ClusterName.ValueStringPointer())
+	err := r.client.AssociateSettingsProfile(ctx, plan.SettingsProfileID.ValueString(), plan.RoleID.ValueStringPointer(), plan.UserID.ValueStringPointer(), plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Associating Settings Profile to Role",
 			fmt.Sprintf("%+v\n", err),
 		)
+
 		return
 	}
 
-	// Keep ID in state if user provided it, otherwise read it
-	if plan.SettingsProfileID.IsNull() || plan.SettingsProfileID.IsUnknown() {
-		// backfill ID so Read/Delete continue to work
-		sp, err := r.client.GetSettingsProfileByName(ctx, profileName, plan.ClusterName.ValueStringPointer())
-		if err == nil && sp != nil {
-			plan.SettingsProfileID = types.StringValue(sp.ID)
-		}
-	}
-
 	state := SettingsProfileAssociation{
-		ClusterName:         plan.ClusterName,
-		SettingsProfileID:   plan.SettingsProfileID,
-		SettingsProfileName: types.StringValue(profileName),
-		RoleID:              plan.RoleID,
-		UserID:              plan.UserID,
+		ClusterName:       plan.ClusterName,
+		SettingsProfileID: plan.SettingsProfileID,
+		RoleID:            plan.RoleID,
+		UserID:            plan.UserID,
 	}
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
