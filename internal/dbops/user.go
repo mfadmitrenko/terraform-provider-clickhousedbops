@@ -138,11 +138,15 @@ func (i *impl) GetUserByName(ctx context.Context, name string, clusterName *stri
 	return user, nil
 }
 
-func (i *impl) GetUserByUUID(ctx context.Context, uuid string, clusterName *string) (*User, error) {
+func (i *impl) GetUserByUUID(ctx context.Context, uuidStr string, clusterName *string) (*User, error) {
+	if _, parseErr := uuid.Parse(uuidStr); parseErr != nil {
+		return i.GetUserByName(ctx, uuidStr, clusterName)
+	}
+
 	sql, err := querybuilder.
 		NewSelect([]querybuilder.Field{querybuilder.NewField("name")}, "system.users").
 		WithCluster(clusterName).
-		Where(querybuilder.WhereEquals("id", uuid)).
+		Where(querybuilder.WhereEquals("id", uuidStr)).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")

@@ -174,7 +174,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
-				WithResourceFieldReference("role_id", "clickhousedbops_role", "role", "id").
+				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
 				AddDependency(user.Build()).
 				AddDependency(settingsProfile.Build()).
 				Build(),
@@ -204,7 +204,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
-				WithResourceFieldReference("role_id", "clickhousedbops_role", "role", "id").
+				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
 				AddDependency(user.Build()).
 				AddDependency(settingsProfile.Build()).
 				Build(),
@@ -237,7 +237,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			Protocol:    "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
-				WithResourceFieldReference("role_id", "clickhousedbops_role", "role", "id").
+				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
 				AddDependency(user.WithStringAttribute("cluster_name", clusterName).Build()).
 				AddDependency(settingsProfile.WithStringAttribute("cluster_name", clusterName).Build()).
 				WithStringAttribute("cluster_name", clusterName).
