@@ -56,14 +56,14 @@ services:
     stop_signal: SIGKILL
     environment:
       - TF_LOG=debug
-      - TF_VAR_host=dev-db-kilo-01.core-dba.kilo.infr.host
+      - TF_VAR_host=${TF_VAR_host}
       - TF_VAR_cluster_name
-      - TF_VAR_auth_strategy=password
-      - TF_VAR_username=teleport_admin
-      - TF_VAR_password="8===o"
-      - TF_VAR_protocol=native
-      - TF_VAR_port=9000
+      - TF_VAR_auth_strategy=${TF_VAR_auth_strategy}
+      - TF_VAR_username=default
+      - TF_VAR_password=test
+      - TF_VAR_protocol=${TF_VAR_protocol}
+      - TF_VAR_port=${TF_VAR_port}
     volumes:
       - ${PWD}/../examples/tests:/tests
-      - ${PWD}/../terraform-provider-clickhousedbops/terraform-provider-clickhousedbops:/tmp/terraform-provider-clickhousedbops/terraform-provider-clickhousedbops
+      - ${PWD}/../terraform-provider-clickhousedbops:/tmp/terraform-provider-clickhousedbops/terraform-provider-clickhousedbops
       - ${PWD}/terraformrc:/root/.terraformrc
