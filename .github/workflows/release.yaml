@@ -60,7 +60,9 @@ jobs:
               echo "Tag $TAG already exists"
               exit 1
             else
-              echo "version=${version}" >> $GITHUB_OUTPUT    
+              echo "version=${version}" >> $GITHUB_OUTPUT
+              echo "goreleaser_config=${goreleaser_config}" >> "$GITHUB_OUTPUT"
+              echo "enable_alpha=${enable_alpha}" >> "$GITHUB_OUTPUT"
             fi
           fi
 
@@ -330,8 +332,10 @@ jobs:
     - name: Create tag
       run: |
         tag="v${{ needs.validate.outputs.version }}"
-        git tag $tag
-        git push origin $tag
+        git config user.name "Release Github Action"
+        git config user.email "bot@users.noreply.github.com"
+        git tag -a "$tag" -m "Release $tag"
+        git push origin "$tag"
         
   # Make a new release out of the tag
   goreleaser:
@@ -364,7 +368,7 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
-          args: release --clean
+          args: release --clean --config ${{ needs.validate.outputs.goreleaser_config }}
         env:
           # GitHub sets the GITHUB_TOKEN secret automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
