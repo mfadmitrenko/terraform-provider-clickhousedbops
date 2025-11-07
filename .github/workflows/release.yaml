@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.check.outputs.version }}
+      goreleaser_config: ${{ steps.check.outputs.goreleaser_config }}
+      enable_alpha: ${{ steps.check.outputs.enable_alpha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
