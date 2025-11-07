@@ -283,8 +283,6 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		state.SSLCertificateCN = types.StringValue(updated.SSLCertificateCN)
 	} else if !plan.SSLCertificateCN.IsNull() && !plan.SSLCertificateCN.IsUnknown() {
 		state.SSLCertificateCN = plan.SSLCertificateCN
-	} else {
-		// preserve existing state (do nothing)
 	}
 
 	if diags := resp.State.Set(ctx, &state); diags.HasError() {
