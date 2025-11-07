@@ -65,5 +65,5 @@ services:
       - TF_VAR_port=${TF_VAR_port}
     volumes:
       - ${PWD}/../examples/tests:/tests
-      - ${PWD}/../terraform-provider-clickhousedbops/terraform-provider-clickhousedbops:/tmp/terraform-provider-clickhousedbops/terraform-provider-clickhousedbops
+      - ${PWD}/../terraform-provider-clickhousedbops:/tmp/terraform-provider-clickhousedbops/terraform-provider-clickhousedbops
       - ${PWD}/terraformrc:/root/.terraformrc
