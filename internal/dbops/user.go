@@ -194,7 +194,6 @@ func (i *impl) FindUserByName(ctx context.Context, name string, clusterName *str
 }
 
 func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (*User, error) {
-	// user.ID now carries the CURRENT NAME from state
 	currentName := user.ID
 	existing, err := i.GetUserByName(ctx, currentName, clusterName)
 	if err != nil {
@@ -204,10 +203,17 @@ func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (
 		return nil, errors.Errorf("user %q not found", currentName)
 	}
 
-	q := querybuilder.NewAlterUser(existing.Name).WithCluster(clusterName)
-	if user.Name != "" && user.Name != existing.Name {
-		q = q.RenameTo(&user.Name)
+	// Only rename if the target name actually differs
+	wantsRename := user.Name != existing.Name
+
+	if !wantsRename {
+		// No changes (since we don't alter other props via ALTER yet)
+		return existing, nil
 	}
+
+	q := querybuilder.NewAlterUser(existing.Name).WithCluster(clusterName)
+	q = q.RenameTo(&user.Name)
+
 	sql, err := q.Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
@@ -215,11 +221,5 @@ func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (
 	if err = i.clickhouseClient.Exec(ctx, sql); err != nil {
 		return nil, errors.WithMessage(err, "error running query")
 	}
-
-	// Return by final name (either new or old)
-	finalName := existing.Name
-	if user.Name != "" {
-		finalName = user.Name
-	}
-	return i.GetUserByName(ctx, finalName, clusterName)
+	return i.GetUserByName(ctx, user.Name, clusterName)
 }

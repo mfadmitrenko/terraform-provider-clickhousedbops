@@ -55,6 +55,9 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "Stable identifier for the resource; equals the username.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -62,7 +65,6 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 			"ssl_certificate_cn": schema.StringAttribute{
 				Optional:    true,
-				Computed:    true, // allow API to normalize; keep state otherwise
 				Description: "CN of the SSL certificate to be used for the user (mutually exclusive with password_sha256_hash_wo).",
 				PlanModifiers: []planmodifier.String{
 					// preserves user-specified value across refresh when API doesn't echo it
@@ -107,12 +109,6 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() {
 		// If the entire plan is null, the resource is planned for destruction.
-		return
-	}
-
-	var plan User
-	if diags := req.Plan.Get(ctx, &plan); diags.HasError() {
-		resp.Diagnostics.Append(diags...)
 		return
 	}
 
@@ -204,18 +200,17 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	sslCN := types.StringNull()
-	if !config.SSLCertificateCN.IsNull() && !config.SSLCertificateCN.IsUnknown() {
-		sslCN = config.SSLCertificateCN // concrete
-	}
-
 	state := User{
 		ClusterName:               plan.ClusterName,
 		ID:                        types.StringValue(createdUser.Name),
 		Name:                      types.StringValue(createdUser.Name),
 		DefaultRole:               plan.DefaultRole,
 		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
-		SSLCertificateCN:          sslCN,
+	}
+
+	state.SSLCertificateCN = types.StringNull()
+	if !plan.SSLCertificateCN.IsNull() && !plan.SSLCertificateCN.IsUnknown() {
+		state.SSLCertificateCN = plan.SSLCertificateCN
 	}
 
 	if diags := resp.State.Set(ctx, state); diags.HasError() {
@@ -243,11 +238,11 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	}
 
 	state.Name = types.StringValue(user.Name)
-	// DEFAULT ROLE is not read back; keep existing state value.
+	state.ID = types.StringValue(user.Name)
 	if user.SSLCertificateCN != "" {
 		state.SSLCertificateCN = types.StringValue(user.SSLCertificateCN)
-	} else {
-		// Explicitly null—do NOT keep Unknown from earlier plans
+	} else if state.SSLCertificateCN.IsUnknown() {
+		// rare case on first refresh; make it explicitly null once
 		state.SSLCertificateCN = types.StringNull()
 	}
 
@@ -288,8 +283,6 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		state.SSLCertificateCN = types.StringValue(updated.SSLCertificateCN)
 	} else if !plan.SSLCertificateCN.IsNull() && !plan.SSLCertificateCN.IsUnknown() {
 		state.SSLCertificateCN = plan.SSLCertificateCN
-	} else {
-		state.SSLCertificateCN = types.StringNull()
 	}
 
 	if diags := resp.State.Set(ctx, &state); diags.HasError() {
