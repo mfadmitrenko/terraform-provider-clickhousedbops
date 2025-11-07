@@ -17,8 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.check.outputs.version }}
-      goreleaser_config: ${{ steps.check.outputs.goreleaser_config }}
-      enable_alpha: ${{ steps.check.outputs.enable_alpha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,8 +61,6 @@ jobs:
               exit 1
             else
               echo "version=${version}" >> $GITHUB_OUTPUT
-              echo "goreleaser_config=${goreleaser_config}" >> "$GITHUB_OUTPUT"
-              echo "enable_alpha=${enable_alpha}" >> "$GITHUB_OUTPUT"
             fi
           fi
 
@@ -370,7 +366,7 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
-          args: release --clean --config ${{ needs.validate.outputs.goreleaser_config }}
+          args: release --clean
         env:
           # GitHub sets the GITHUB_TOKEN secret automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
