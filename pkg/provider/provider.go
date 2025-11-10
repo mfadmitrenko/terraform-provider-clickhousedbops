@@ -40,6 +40,10 @@ const (
 var (
 	availableProtocols      = []string{protocolNative, protocolNativeSecure, protocolHTTP, protocolHTTPS}
 	availableAuthStrategies = []string{authStrategyPassword, authStrategyBasicAuth}
+
+	newNativeClientFunc = clickhouseclient.NewNativeClient
+	newHTTPClientFunc   = clickhouseclient.NewHTTPClient
+	newDBOpsClientFunc  = dbops.NewClient
 )
 
 // Ensure Provider satisfies various provider interfaces.
@@ -147,6 +151,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				valid, errorStrings := auth.ValidateConfig()
 				if !valid {
 					resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid authentication strategy configuration. %s", strings.Join(errorStrings, ", ")))
+					return
 				}
 			default:
 				resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid authentication strategy %q. %s protocol only supports %q", data.AuthConfig.Strategy, protocolNative, authStrategyPassword))
@@ -166,7 +171,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				}
 			}
 
-			clickhouseClient, err = clickhouseclient.NewNativeClient(clickhouseclient.NativeClientConfig{
+			clickhouseClient, err = newNativeClientFunc(clickhouseclient.NativeClientConfig{
 				Host:             data.Host.ValueString(),
 				Port:             port,
 				UserPasswordAuth: auth,
@@ -189,6 +194,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				valid, errorStrings := auth.ValidateConfig()
 				if !valid {
 					resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid authentication strategy configuration. %s", strings.Join(errorStrings, ", ")))
+					return
 				}
 			default:
 				resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid authentication strategy %q. %s protocol only supports %q", data.AuthConfig.Strategy, protocolHTTP, authStrategyBasicAuth))
@@ -226,7 +232,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				TLSConfig: tlsConfig,
 			}
 
-			clickhouseClient, err = clickhouseclient.NewHTTPClient(config)
+			clickhouseClient, err = newHTTPClientFunc(config)
 		}
 	}
 
@@ -235,7 +241,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
-	dbopsClient, err := dbops.NewClient(clickhouseClient)
+	dbopsClient, err := newDBOpsClientFunc(clickhouseClient)
 	if err != nil {
 		resp.Diagnostics.AddError("error initializing dbops client", fmt.Sprintf("%+v\n", err))
 		return
