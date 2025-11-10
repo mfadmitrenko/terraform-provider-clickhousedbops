@@ -59,7 +59,7 @@ func (q *selectQueryBuilder) Build() (string, error) {
 		return "", errors.New("tableName cannot be empty for SELECT queries")
 	}
 	if len(q.fields) == 0 {
-		return "", errors.New("at least one with is required for SELECT queries")
+		return "", errors.New("at least one field is required for SELECT queries")
 	}
 
 	fields := make([]string, 0)

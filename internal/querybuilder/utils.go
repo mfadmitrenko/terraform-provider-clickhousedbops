@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// backtick escapes the ` characted in strings to make them safe for use in SQL queries as literal values.
+// backtick escapes the ` character in strings to make them safe for use in SQL queries as identifiers.
 func backtick(s string) string {
 	return fmt.Sprintf("`%s`", strings.ReplaceAll(backslash(s), "`", "\\`"))
 }

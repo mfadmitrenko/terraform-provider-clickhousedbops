@@ -1,6 +1,7 @@
 package querybuilder
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -9,15 +10,16 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 	orderDirection := ASC
 
 	tests := []struct {
-		name     string
-		fields   []Field
-		where    []Where
-		from     string
-		cluster  string
-		orderCol *Field
-		orderDir *OrderDirection
-		want     string
-		wantErr  bool
+		name        string
+		fields      []Field
+		where       []Where
+		from        string
+		cluster     string
+		orderCol    *Field
+		orderDir    *OrderDirection
+		want        string
+		wantErr     bool
+		errContains string
 	}{
 		{
 			name:    "Select one with",
@@ -74,6 +76,20 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			want:     "SELECT `name` FROM `users` WHERE (mock_where_clause) ORDER BY `col1` ASC;",
 			wantErr:  false,
 		},
+		{
+			name:        "Missing table name",
+			fields:      []Field{NewField("name")},
+			from:        "",
+			wantErr:     true,
+			errContains: "tableName cannot be empty",
+		},
+		{
+			name:        "Missing fields",
+			fields:      []Field{},
+			from:        "users",
+			wantErr:     true,
+			errContains: "at least one field",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -90,6 +106,12 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			got, err := q.Build()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Build() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				if tt.errContains != "" && (err == nil || !strings.Contains(err.Error(), tt.errContains)) {
+					t.Fatalf("Build() error = %v, want contains %q", err, tt.errContains)
+				}
 				return
 			}
 			if got != tt.want {
