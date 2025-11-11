@@ -18,9 +18,9 @@ With this Terraform provider you can:
 
 The `clickhousedbops_user` requires at least terraform 1.11, while the other resources should work with older versions too.
 
-You can find examples in the [examples/tests](https://github.com/ClickHouse/terraform-provider-clickhousedbops/tree/main/examples/tests) directory.
+You can find examples in the [examples/tests](https://github.com/mfadmitrenko/terraform-provider-clickhousedbops/tree/main/examples/tests) directory.
 
-Please refer to the [official docs](https://registry.terraform.io/providers/ClickHouse/clickhousedbops/latest/docs) for more details.
+Please refer to the [official docs](https://registry.terraform.io/providers/mfadmitrenko/clickhousedbops/latest/docs) for more details.
 
 ## Migrating from terraform-provider-clickhouse
 
