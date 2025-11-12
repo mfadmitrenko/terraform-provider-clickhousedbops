@@ -260,21 +260,18 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 
 	if len(user.SettingsProfiles) == 0 {
 		state.SettingsProfile = types.StringNull()
-	} else {
-		// Preserve planned value when still associated; otherwise use first profile.
-		if !state.SettingsProfile.IsNull() && !state.SettingsProfile.IsUnknown() {
-			wanted := state.SettingsProfile.ValueString()
-			found := false
-			for _, profile := range user.SettingsProfiles {
-				if profile == wanted {
-					found = true
-					break
-				}
+	} else if !state.SettingsProfile.IsNull() && !state.SettingsProfile.IsUnknown() {
+		// Preserve planned value when still associated; otherwise mirror the first profile returned
+		// by ClickHouse so Terraform detects the drift.
+		wanted := state.SettingsProfile.ValueString()
+		found := false
+		for _, profile := range user.SettingsProfiles {
+			if profile == wanted {
+				found = true
+				break
 			}
-			if !found {
-				state.SettingsProfile = types.StringValue(user.SettingsProfiles[0])
-			}
-		} else {
+		}
+		if !found {
 			state.SettingsProfile = types.StringValue(user.SettingsProfiles[0])
 		}
 	}
