@@ -13,6 +13,7 @@ type CreateUserQueryBuilder interface {
 	Identified(with Identification, by string) CreateUserQueryBuilder
 	IdentifiedWithSSLCertCN(cn string) CreateUserQueryBuilder
 	WithDefaultRole(roleName *string) CreateUserQueryBuilder
+	WithSettingsProfile(profileName *string) CreateUserQueryBuilder
 	WithCluster(clusterName *string) CreateUserQueryBuilder
 }
 
@@ -23,10 +24,11 @@ const (
 )
 
 type createUserQueryBuilder struct {
-	resourceName string
-	identified   string
-	defaultRole  *string
-	clusterName  *string
+	resourceName    string
+	identified      string
+	defaultRole     *string
+	settingsProfile *string
+	clusterName     *string
 }
 
 func NewCreateUser(resourceName string) CreateUserQueryBuilder {
@@ -47,6 +49,11 @@ func (q *createUserQueryBuilder) IdentifiedWithSSLCertCN(cn string) CreateUserQu
 
 func (q *createUserQueryBuilder) WithDefaultRole(roleName *string) CreateUserQueryBuilder {
 	q.defaultRole = roleName
+	return q
+}
+
+func (q *createUserQueryBuilder) WithSettingsProfile(profileName *string) CreateUserQueryBuilder {
+	q.settingsProfile = profileName
 	return q
 }
 
@@ -73,6 +80,9 @@ func (q *createUserQueryBuilder) Build() (string, error) {
 	}
 	if q.identified != "" {
 		tokens = append(tokens, q.identified)
+	}
+	if q.settingsProfile != nil {
+		tokens = append(tokens, "SETTINGS", "PROFILE", quote(*q.settingsProfile))
 	}
 	if q.defaultRole != nil {
 		tokens = append(tokens, "DEFAULT", "ROLE", quote(*q.defaultRole))

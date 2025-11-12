@@ -48,6 +48,7 @@ resource "clickhousedbops_user" "john" {
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
 - `default_role` (String) Default role to assign at creation time.
+- `settings_profile` (String) Settings profile to assign at creation time.
 - `password_sha256_hash_wo` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user (write-only, mutually exclusive with ssl_certificate_cn).
 - `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
 - `ssl_certificate_cn` (String) CN of the SSL certificate to be used for the user (mutually exclusive with password_sha256_hash_wo).
