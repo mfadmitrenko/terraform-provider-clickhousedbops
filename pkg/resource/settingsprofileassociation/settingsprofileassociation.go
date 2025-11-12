@@ -153,6 +153,14 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving Settings Profile",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
+	}
+
 	err = r.client.AssociateSettingsProfile(ctx, profile.ID, plan.RoleID.ValueStringPointer(), plan.UserID.ValueStringPointer(), plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(

@@ -27,7 +27,7 @@ resource "clickhousedbops_settings_profile_association" "roleassociation" {
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
-- `settings_profile_id` (String) ID of the settings profile to associate. Exactly one of `settings_profile_id` or `settings_profile_name` must be specified.
-- `settings_profile_name` (String) Name of the settings profile to associate. Exactly one of `settings_profile_id` or `settings_profile_name` must be specified.
 - `role_id` (String) ID of the SettingsProfileAssociation to associate the Settings profile to
+- `settings_profile_id` (String) ID of the settings profile to associate
+- `settings_profile_name` (String) Name of the settings profile to associate
 - `user_id` (String) ID of the User to associate the Settings profile to
