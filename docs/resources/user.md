@@ -6,6 +6,8 @@ description: |-
   You can use the clickhousedbops_user resource to create a user in a ClickHouse instance.
   Known limitations:
   Changing the password_sha256_hash_wo field alone does not have any effect. In order to change the password of a user, you also need to bump password_sha256_hash_wo_version field.Changing the user's password as described above will cause the database user to be deleted and recreated.When importing an existing user, the clickhousedbops_user resource will be lacking the password_sha256_hash_wo_version and thus the subsequent apply will need to recreate the database User in order to set a password.
+  Optional arguments:
+  default_role (String) Default role to assign at creation time.settings_profile (String) Settings profile to assign at creation time.
 ---
 
 # clickhousedbops_user (Resource)
@@ -17,6 +19,11 @@ Known limitations:
 - Changing the `password_sha256_hash_wo` field alone does not have any effect. In order to change the password of a user, you also need to bump `password_sha256_hash_wo_version` field.
 - Changing the user's password as described above will cause the database user to be deleted and recreated.
 - When importing an existing user, the `clickhousedbops_user` resource will be lacking the `password_sha256_hash_wo_version` and thus the subsequent apply will need to recreate the database User in order to set a password.
+
+Optional arguments:
+
+- `default_role` (String) Default role to assign at creation time.
+- `settings_profile` (String) Settings profile to assign at creation time.
 
 ## Example Usage
 
@@ -50,6 +57,7 @@ When using a self hosted ClickHouse instance, this field should only be set when
 - `default_role` (String) Default role to assign at creation time.
 - `password_sha256_hash_wo` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user (write-only, mutually exclusive with ssl_certificate_cn).
 - `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
+- `settings_profile` (String) Settings profile to assign at creation time.
 - `ssl_certificate_cn` (String) CN of the SSL certificate to be used for the user (mutually exclusive with password_sha256_hash_wo).
 
 ### Read-Only

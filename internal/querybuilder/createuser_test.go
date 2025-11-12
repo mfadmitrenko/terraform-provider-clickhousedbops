@@ -6,15 +6,16 @@ import (
 
 func Test_createuser(t *testing.T) {
 	tests := []struct {
-		name           string
-		resourceName   string
-		identifiedWith Identification
-		identifiedBy   string
-		sslCN          string
-		defaultRole    string
-		clusterName    string
-		want           string
-		wantErr        bool
+		name            string
+		resourceName    string
+		identifiedWith  Identification
+		identifiedBy    string
+		sslCN           string
+		defaultRole     string
+		settingsProfile string
+		clusterName     string
+		want            string
+		wantErr         bool
 	}{
 		{
 			name:         "Create user no auth",
@@ -61,6 +62,9 @@ func Test_createuser(t *testing.T) {
 			}
 			if tt.defaultRole != "" {
 				q = q.WithDefaultRole(&tt.defaultRole)
+			}
+			if tt.settingsProfile != "" {
+				q = q.WithSettingsProfile(&tt.settingsProfile)
 			}
 
 			got, err := q.Build()

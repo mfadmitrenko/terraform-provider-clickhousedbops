@@ -16,6 +16,7 @@ type User struct {
 	PasswordSha256Hash string   `json:"-"`
 	DefaultRole        string   `json:"-"`
 	SSLCertificateCN   string   `json:"-"`
+	SettingsProfile    string   `json:"-"`
 	SettingsProfiles   []string `json:"-"`
 }
 
@@ -58,6 +59,10 @@ func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (
 
 	if user.DefaultRole != "" {
 		q = q.WithDefaultRole(&user.DefaultRole)
+	}
+
+	if user.SettingsProfile != "" {
+		q = q.WithSettingsProfile(&user.SettingsProfile)
 	}
 
 	sql, err := q.Build()
@@ -133,6 +138,9 @@ func (i *impl) GetUserByName(ctx context.Context, name string, clusterName *stri
 			return nil, errors.WithMessage(err, "error running query")
 		}
 		user.SettingsProfiles = profiles
+		if len(profiles) > 0 {
+			user.SettingsProfile = profiles[0]
+		}
 	}
 
 	return user, nil

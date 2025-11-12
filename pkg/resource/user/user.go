@@ -101,6 +101,13 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"settings_profile": schema.StringAttribute{
+				Optional:    true,
+				Description: "Settings profile to assign at creation time.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 		},
 		MarkdownDescription: userResourceDescription,
 	}
@@ -194,6 +201,10 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		u.DefaultRole = plan.DefaultRole.ValueString()
 	}
 
+	if !plan.SettingsProfile.IsNull() && !plan.SettingsProfile.IsUnknown() {
+		u.SettingsProfile = plan.SettingsProfile.ValueString()
+	}
+
 	createdUser, err := r.client.CreateUser(ctx, u, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Creating ClickHouse User", fmt.Sprintf("%+v\n", err))
@@ -205,6 +216,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		ID:                        types.StringValue(createdUser.Name),
 		Name:                      types.StringValue(createdUser.Name),
 		DefaultRole:               plan.DefaultRole,
+		SettingsProfile:           plan.SettingsProfile,
 		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
 	}
 
@@ -246,6 +258,24 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		state.SSLCertificateCN = types.StringNull()
 	}
 
+	if len(user.SettingsProfiles) == 0 {
+		state.SettingsProfile = types.StringNull()
+	} else if !state.SettingsProfile.IsNull() && !state.SettingsProfile.IsUnknown() {
+		// Preserve planned value when still associated; otherwise mirror the first profile returned
+		// by ClickHouse so Terraform detects the drift.
+		wanted := state.SettingsProfile.ValueString()
+		found := false
+		for _, profile := range user.SettingsProfiles {
+			if profile == wanted {
+				found = true
+				break
+			}
+		}
+		if !found {
+			state.SettingsProfile = types.StringValue(user.SettingsProfiles[0])
+		}
+	}
+
 	if diags := resp.State.Set(ctx, &state); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 	}
@@ -279,6 +309,7 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	state.ID = types.StringValue(updated.Name)
 	// keep DefaultRole from plan in state
 	state.DefaultRole = plan.DefaultRole
+	state.SettingsProfile = plan.SettingsProfile
 	if updated.SSLCertificateCN != "" {
 		state.SSLCertificateCN = types.StringValue(updated.SSLCertificateCN)
 	} else if !plan.SSLCertificateCN.IsNull() && !plan.SSLCertificateCN.IsUnknown() {
