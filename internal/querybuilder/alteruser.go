@@ -40,6 +40,10 @@ func (q *alterUserQueryBuilder) IfExists() AlterUserQueryBuilder {
 
 func (q *alterUserQueryBuilder) SetSettingsProfile(profileName *string) AlterUserQueryBuilder {
 	q.setSettingsProfile = profileName
+	if profileName != nil {
+		q.oldSettingsProfile = nil
+		q.newSettingsProfile = nil
+	}
 	return q
 }
 
@@ -88,13 +92,22 @@ func (q *alterUserQueryBuilder) Build() (string, error) {
 		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
 	}
 
-	if q.oldSettingsProfile != nil && (q.newSettingsProfile == nil || *q.oldSettingsProfile != *q.newSettingsProfile) {
+	if q.setSettingsProfile != nil {
 		anyChanges = true
-		tokens = append(tokens, "DROP", "PROFILES", quote(*q.oldSettingsProfile))
-	}
-	if q.newSettingsProfile != nil && (q.oldSettingsProfile == nil || *q.newSettingsProfile != *q.oldSettingsProfile) {
-		anyChanges = true
-		tokens = append(tokens, "ADD", "PROFILES", quote(*q.newSettingsProfile))
+		if *q.setSettingsProfile == "" {
+			tokens = append(tokens, "SETTINGS", "PROFILE", "DEFAULT")
+		} else {
+			tokens = append(tokens, "SETTINGS", "PROFILE", quote(*q.setSettingsProfile))
+		}
+	} else {
+		if q.oldSettingsProfile != nil && (q.newSettingsProfile == nil || *q.oldSettingsProfile != *q.newSettingsProfile) {
+			anyChanges = true
+			tokens = append(tokens, "DROP", "PROFILES", quote(*q.oldSettingsProfile))
+		}
+		if q.newSettingsProfile != nil && (q.oldSettingsProfile == nil || *q.newSettingsProfile != *q.oldSettingsProfile) {
+			anyChanges = true
+			tokens = append(tokens, "ADD", "PROFILES", quote(*q.newSettingsProfile))
+		}
 	}
 
 	if !anyChanges {

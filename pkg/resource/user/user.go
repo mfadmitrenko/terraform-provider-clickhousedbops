@@ -258,22 +258,13 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		state.SSLCertificateCN = types.StringNull()
 	}
 
-	if len(user.SettingsProfiles) == 0 {
+	switch {
+	case user.SettingsProfile != "":
+		state.SettingsProfile = types.StringValue(user.SettingsProfile)
+	case len(user.SettingsProfiles) == 0:
 		state.SettingsProfile = types.StringNull()
-	} else if !state.SettingsProfile.IsNull() && !state.SettingsProfile.IsUnknown() {
-		// Preserve planned value when still associated; otherwise mirror the first profile returned
-		// by ClickHouse so Terraform detects the drift.
-		wanted := state.SettingsProfile.ValueString()
-		found := false
-		for _, profile := range user.SettingsProfiles {
-			if profile == wanted {
-				found = true
-				break
-			}
-		}
-		if !found {
-			state.SettingsProfile = types.StringValue(user.SettingsProfiles[0])
-		}
+	case state.SettingsProfile.IsNull() || state.SettingsProfile.IsUnknown():
+		state.SettingsProfile = types.StringValue(user.SettingsProfiles[0])
 	}
 
 	if diags := resp.State.Set(ctx, &state); diags.HasError() {

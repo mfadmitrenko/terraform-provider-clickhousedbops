@@ -9,6 +9,7 @@ func Test_alterRoleQueryBuilder_Build(t *testing.T) {
 		name               string
 		oldSettingsProfile *string
 		newSettingsProfile *string
+		setSettingsProfile *string
 		newName            *string
 		clusterName        *string
 		want               string
@@ -34,6 +35,12 @@ func Test_alterRoleQueryBuilder_Build(t *testing.T) {
 			wantErr:            false,
 		},
 		{
+			name:               "Set profile",
+			setSettingsProfile: strPtr("profile1"),
+			want:               "ALTER ROLE `foo` SETTINGS PROFILE 'profile1';",
+			wantErr:            false,
+		},
+		{
 			name:               "Replace profile",
 			newSettingsProfile: strPtr("profile1"),
 			oldSettingsProfile: strPtr("old"),
@@ -45,6 +52,13 @@ func Test_alterRoleQueryBuilder_Build(t *testing.T) {
 			newSettingsProfile: strPtr("profile1"),
 			clusterName:        strPtr("cluster1"),
 			want:               "ALTER ROLE `foo` ON CLUSTER 'cluster1' ADD PROFILE 'profile1';",
+			wantErr:            false,
+		},
+		{
+			name:               "Set profile on cluster",
+			setSettingsProfile: strPtr("profile1"),
+			clusterName:        strPtr("cluster1"),
+			want:               "ALTER ROLE `foo` ON CLUSTER 'cluster1' SETTINGS PROFILE 'profile1';",
 			wantErr:            false,
 		},
 		{
@@ -80,6 +94,7 @@ func Test_alterRoleQueryBuilder_Build(t *testing.T) {
 				resourceName:       "foo",
 				oldSettingsProfile: tt.oldSettingsProfile,
 				newSettingsProfile: tt.newSettingsProfile,
+				setSettingsProfile: tt.setSettingsProfile,
 				newName:            tt.newName,
 				clusterName:        tt.clusterName,
 			}

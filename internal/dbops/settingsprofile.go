@@ -204,7 +204,7 @@ func (i *impl) AssociateSettingsProfile(ctx context.Context, id string, roleId *
 		sql, err := querybuilder.
 			NewAlterUser(user).
 			WithCluster(clusterName).
-			AddSettingsProfile(&profile.Name).
+			SetSettingsProfile(&profile.Name).
 			Build()
 		if err != nil {
 			return errors.WithMessage(err, "Error building query")
@@ -265,10 +265,11 @@ func (i *impl) DisassociateSettingsProfile(ctx context.Context, id string, roleI
 			return errors.New("Cannot find user")
 		}
 
+		empty := ""
 		sql, err := querybuilder.
 			NewAlterUser(user).
 			WithCluster(clusterName).
-			DropSettingsProfile(&profile.Name).
+			SetSettingsProfile(&empty).
 			Build()
 		if err != nil {
 			return errors.WithMessage(err, "Error building query")

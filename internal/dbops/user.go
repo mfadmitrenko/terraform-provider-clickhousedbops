@@ -36,6 +36,9 @@ func (i *impl) resolveUserName(ctx context.Context, ref string, clusterName *str
 }
 
 func (u *User) HasSettingProfile(profileName string) bool {
+	if u.SettingsProfile == profileName {
+		return true
+	}
 	for _, p := range u.SettingsProfiles {
 		if p == profileName {
 			return true
@@ -83,6 +86,7 @@ func (i *impl) GetUserByName(ctx context.Context, name string, clusterName *stri
 		NewSelect([]querybuilder.Field{
 			querybuilder.NewField("name"),
 			querybuilder.NewField("id").ToString(), // optional; for introspection only
+			querybuilder.NewField("profile"),
 		}, "system.users").
 		WithCluster(clusterName).
 		Where(querybuilder.WhereEquals("name", name)).
@@ -98,9 +102,16 @@ func (i *impl) GetUserByName(ctx context.Context, name string, clusterName *stri
 			return errors.WithMessage(err, "error scanning query result, missing 'name' field")
 		}
 		chID, _ := data.GetNullableString("id") // may vary across nodes; do not use for identity
+		profile, err := data.GetNullableString("profile")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'profile' field")
+		}
 		u := &User{Name: n}
 		if chID != nil {
 			u.ID = *chID
+		}
+		if profile != nil {
+			u.SettingsProfile = *profile
 		}
 		user = u
 		return nil
@@ -138,7 +149,7 @@ func (i *impl) GetUserByName(ctx context.Context, name string, clusterName *stri
 			return nil, errors.WithMessage(err, "error running query")
 		}
 		user.SettingsProfiles = profiles
-		if len(profiles) > 0 {
+		if user.SettingsProfile == "" && len(profiles) > 0 {
 			user.SettingsProfile = profiles[0]
 		}
 	}
