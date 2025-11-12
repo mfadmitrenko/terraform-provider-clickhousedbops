@@ -158,7 +158,20 @@ func (i *impl) UpdateSettingsProfile(ctx context.Context, settingsProfile Settin
 	return i.GetSettingsProfile(ctx, settingsProfile.ID, clusterName)
 }
 
+func normalizeRef(ref *string) *string {
+	if ref == nil {
+		return nil
+	}
+	if *ref == "" {
+		return nil
+	}
+	return ref
+}
+
 func (i *impl) AssociateSettingsProfile(ctx context.Context, id string, roleId *string, userId *string, clusterName *string) error {
+	roleId = normalizeRef(roleId)
+	userId = normalizeRef(userId)
+
 	profile, err := i.GetSettingsProfile(ctx, id, clusterName)
 	if err != nil {
 		return errors.WithMessage(err, "error looking up settings profile name")
@@ -222,6 +235,8 @@ func (i *impl) AssociateSettingsProfile(ctx context.Context, id string, roleId *
 }
 
 func (i *impl) DisassociateSettingsProfile(ctx context.Context, id string, roleId *string, userId *string, clusterName *string) error {
+	roleId = normalizeRef(roleId)
+	userId = normalizeRef(userId)
 	profile, err := i.GetSettingsProfile(ctx, id, clusterName)
 	if err != nil {
 		return errors.WithMessage(err, "error looking up settings profile name")

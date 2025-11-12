@@ -153,15 +153,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error Resolving Settings Profile",
-			fmt.Sprintf("%+v\n", err),
-		)
-		return
-	}
-
-	err = r.client.AssociateSettingsProfile(ctx, profile.ID, plan.RoleID.ValueStringPointer(), plan.UserID.ValueStringPointer(), plan.ClusterName.ValueStringPointer())
+	err = r.client.AssociateSettingsProfile(ctx, profile.ID, optionalStringPointer(plan.RoleID), optionalStringPointer(plan.UserID), optionalStringPointer(plan.ClusterName))
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Associating Settings Profile to Role",
@@ -214,7 +206,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	state.SettingsProfileName = types.StringValue(settingsProfile.Name)
 
 	if !state.RoleID.IsUnknown() && !state.RoleID.IsNull() {
-		role, err := r.client.GetRole(ctx, state.RoleID.ValueString(), state.ClusterName.ValueStringPointer())
+		role, err := r.client.GetRole(ctx, state.RoleID.ValueString(), optionalStringPointer(state.ClusterName))
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error Getting Role",
@@ -237,9 +229,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		)
 
 		if _, parseErr := uuid.Parse(ref); parseErr == nil {
-			user, getErr = r.client.GetUserByUUID(ctx, ref, state.ClusterName.ValueStringPointer())
+			user, getErr = r.client.GetUserByUUID(ctx, ref, optionalStringPointer(state.ClusterName))
 		} else {
-			user, getErr = r.client.GetUserByName(ctx, ref, state.ClusterName.ValueStringPointer())
+			user, getErr = r.client.GetUserByName(ctx, ref, optionalStringPointer(state.ClusterName))
 		}
 
 		if getErr != nil {
@@ -284,7 +276,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		profileID = settingsProfile.ID
 	}
 
-	err := r.client.DisassociateSettingsProfile(ctx, profileID, state.RoleID.ValueStringPointer(), state.UserID.ValueStringPointer(), state.ClusterName.ValueStringPointer())
+	err := r.client.DisassociateSettingsProfile(ctx, profileID, optionalStringPointer(state.RoleID), optionalStringPointer(state.UserID), optionalStringPointer(state.ClusterName))
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting ClickHouse SettingsProfileAssociation",
@@ -295,7 +287,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 }
 
 func (r *Resource) resolveSettingsProfile(ctx context.Context, plan *SettingsProfileAssociation, diags *diag.Diagnostics) (*dbops.SettingsProfile, error) {
-	clusterName := plan.ClusterName.ValueStringPointer()
+	clusterName := optionalStringPointer(plan.ClusterName)
 
 	if !plan.SettingsProfileID.IsNull() && !plan.SettingsProfileID.IsUnknown() {
 		profile, err := r.client.GetSettingsProfile(ctx, plan.SettingsProfileID.ValueString(), clusterName)
@@ -350,7 +342,7 @@ func (r *Resource) resolveSettingsProfile(ctx context.Context, plan *SettingsPro
 }
 
 func (r *Resource) getSettingsProfile(ctx context.Context, state *SettingsProfileAssociation) (*dbops.SettingsProfile, error) {
-	clusterName := state.ClusterName.ValueStringPointer()
+	clusterName := optionalStringPointer(state.ClusterName)
 
 	if !state.SettingsProfileID.IsNull() && !state.SettingsProfileID.IsUnknown() && state.SettingsProfileID.ValueString() != "" {
 		return r.client.GetSettingsProfile(ctx, state.SettingsProfileID.ValueString(), clusterName)
@@ -361,4 +353,17 @@ func (r *Resource) getSettingsProfile(ctx context.Context, state *SettingsProfil
 	}
 
 	return nil, nil
+}
+
+func optionalStringPointer(v types.String) *string {
+	if v.IsNull() || v.IsUnknown() {
+		return nil
+	}
+
+	value := v.ValueString()
+	if value == "" {
+		return nil
+	}
+
+	return &value
 }

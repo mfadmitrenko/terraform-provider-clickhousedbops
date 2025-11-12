@@ -17,6 +17,7 @@ type User struct {
 	DefaultRole        string   `json:"-"`
 	SSLCertificateCN   string   `json:"-"`
 	SettingsProfile    string   `json:"-"`
+	SettingsProfileSet bool     `json:"-"`
 	SettingsProfiles   []string `json:"-"`
 }
 
@@ -86,7 +87,6 @@ func (i *impl) GetUserByName(ctx context.Context, name string, clusterName *stri
 		NewSelect([]querybuilder.Field{
 			querybuilder.NewField("name"),
 			querybuilder.NewField("id").ToString(), // optional; for introspection only
-			querybuilder.NewField("profile"),
 		}, "system.users").
 		WithCluster(clusterName).
 		Where(querybuilder.WhereEquals("name", name)).
@@ -102,16 +102,9 @@ func (i *impl) GetUserByName(ctx context.Context, name string, clusterName *stri
 			return errors.WithMessage(err, "error scanning query result, missing 'name' field")
 		}
 		chID, _ := data.GetNullableString("id") // may vary across nodes; do not use for identity
-		profile, err := data.GetNullableString("profile")
-		if err != nil {
-			return errors.WithMessage(err, "error scanning query result, missing 'profile' field")
-		}
 		u := &User{Name: n}
 		if chID != nil {
 			u.ID = *chID
-		}
-		if profile != nil {
-			u.SettingsProfile = *profile
 		}
 		user = u
 		return nil
@@ -123,12 +116,12 @@ func (i *impl) GetUserByName(ctx context.Context, name string, clusterName *stri
 		return nil, nil // not found
 	}
 
-	// Also fetch settings profiles (unchanged)
 	{
 		sql, err = querybuilder.
 			NewSelect([]querybuilder.Field{querybuilder.NewField("inherit_profile")}, "system.settings_profile_elements").
 			WithCluster(clusterName).
 			Where(querybuilder.WhereEquals("user_name", user.Name)).
+			OrderBy(querybuilder.NewField("index"), querybuilder.ASC).
 			Build()
 		if err != nil {
 			return nil, errors.WithMessage(err, "error building query")
@@ -222,16 +215,34 @@ func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (
 		return nil, errors.Errorf("user %q not found", currentName)
 	}
 
-	// Only rename if the target name actually differs
-	wantsRename := user.Name != existing.Name
+	desiredProfile := (*string)(nil)
+	if user.SettingsProfileSet {
+		desiredProfile = &user.SettingsProfile
+	}
 
-	if !wantsRename {
-		// No changes (since we don't alter other props via ALTER yet)
+	wantsRename := user.Name != existing.Name
+	wantsProfileChange := false
+	if user.SettingsProfileSet {
+		if user.SettingsProfile == "" {
+			wantsProfileChange = existing.SettingsProfile != ""
+		} else {
+			wantsProfileChange = existing.SettingsProfile != user.SettingsProfile
+		}
+	}
+
+	if !wantsRename && !wantsProfileChange {
 		return existing, nil
 	}
 
 	q := querybuilder.NewAlterUser(existing.Name).WithCluster(clusterName)
-	q = q.RenameTo(&user.Name)
+
+	if wantsRename {
+		q = q.RenameTo(&user.Name)
+	}
+
+	if wantsProfileChange {
+		q = q.SetSettingsProfile(desiredProfile)
+	}
 
 	sql, err := q.Build()
 	if err != nil {

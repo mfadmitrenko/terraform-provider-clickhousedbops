@@ -1,15 +1,15 @@
-resource "clickhousedbops_user" "john" {
+resource "clickhousedbops_user" "admitrenko" {
   cluster_name = var.cluster_name
-  name = "john"
+  name = "admitrenko"
   # You'll want to generate the password and feed it here instead of hardcoding.
   # password_sha256_hash_wo = sha256("test")
   # password_sha256_hash_wo_version = 1
-  ssl_certificate_cn = "john"
+  ssl_certificate_cn = "admitrenko"
   default_role = "teleport_reader"
-  settings_profile = "default"
+  # settings_profile = "default"
 }
 
 resource "clickhousedbops_settings_profile_association" "userassociation" {
   settings_profile_name = "maxquery"
-  user_id = clickhousedbops_user.john.id
+  user_id = clickhousedbops_user.admitrenko.id
 }

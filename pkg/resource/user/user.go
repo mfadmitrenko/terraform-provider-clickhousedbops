@@ -202,10 +202,11 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	if !plan.SettingsProfile.IsNull() && !plan.SettingsProfile.IsUnknown() {
+		u.SettingsProfileSet = true
 		u.SettingsProfile = plan.SettingsProfile.ValueString()
 	}
 
-	createdUser, err := r.client.CreateUser(ctx, u, plan.ClusterName.ValueStringPointer())
+	createdUser, err := r.client.CreateUser(ctx, u, optionalStringPointer(plan.ClusterName))
 	if err != nil {
 		resp.Diagnostics.AddError("Error Creating ClickHouse User", fmt.Sprintf("%+v\n", err))
 		return
@@ -238,7 +239,19 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	user, err := r.client.GetUserByName(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
+	lookupName := ""
+	if !state.ID.IsNull() && !state.ID.IsUnknown() {
+		lookupName = state.ID.ValueString()
+	}
+	if lookupName == "" && !state.Name.IsNull() && !state.Name.IsUnknown() {
+		lookupName = state.Name.ValueString()
+	}
+	if lookupName == "" {
+		resp.Diagnostics.AddError("Error Reading ClickHouse User", "state was missing both id and name identifiers")
+		return
+	}
+
+	user, err := r.client.GetUserByName(ctx, lookupName, optionalStringPointer(state.ClusterName))
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading ClickHouse User", fmt.Sprintf("%+v\n", err))
 		return
@@ -258,13 +271,24 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		state.SSLCertificateCN = types.StringNull()
 	}
 
+	currentProfile := ""
+	if !state.SettingsProfile.IsNull() && !state.SettingsProfile.IsUnknown() {
+		currentProfile = state.SettingsProfile.ValueString()
+	}
+
 	switch {
-	case user.SettingsProfile != "":
-		state.SettingsProfile = types.StringValue(user.SettingsProfile)
-	case len(user.SettingsProfiles) == 0:
-		state.SettingsProfile = types.StringNull()
+	case user.SettingsProfile == "" && len(user.SettingsProfiles) == 0:
+		if state.SettingsProfile.IsNull() || state.SettingsProfile.IsUnknown() {
+			state.SettingsProfile = types.StringNull()
+		}
 	case state.SettingsProfile.IsNull() || state.SettingsProfile.IsUnknown():
-		state.SettingsProfile = types.StringValue(user.SettingsProfiles[0])
+		if user.SettingsProfile != "" {
+			state.SettingsProfile = types.StringValue(user.SettingsProfile)
+		} else if len(user.SettingsProfiles) > 0 {
+			state.SettingsProfile = types.StringValue(user.SettingsProfiles[0])
+		}
+	case currentProfile == user.SettingsProfile && user.SettingsProfile != "":
+		state.SettingsProfile = types.StringValue(user.SettingsProfile)
 	}
 
 	if diags := resp.State.Set(ctx, &state); diags.HasError() {
@@ -290,7 +314,20 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		// DefaultRole changes are not handled via ALTER; keep as is for now.
 	}
 
-	updated, err := r.client.UpdateUser(ctx, u, plan.ClusterName.ValueStringPointer())
+	if plan.SettingsProfile.IsNull() || plan.SettingsProfile.IsUnknown() {
+		if !state.SettingsProfile.IsNull() && !state.SettingsProfile.IsUnknown() {
+			u.SettingsProfileSet = true
+			u.SettingsProfile = ""
+		}
+	} else {
+		desiredProfile := plan.SettingsProfile.ValueString()
+		if state.SettingsProfile.IsNull() || state.SettingsProfile.IsUnknown() || state.SettingsProfile.ValueString() != desiredProfile {
+			u.SettingsProfileSet = true
+		}
+		u.SettingsProfile = desiredProfile
+	}
+
+	updated, err := r.client.UpdateUser(ctx, u, optionalStringPointer(plan.ClusterName))
 	if err != nil {
 		resp.Diagnostics.AddError("Error Updating ClickHouse User", fmt.Sprintf("%+v\n", err))
 		return
@@ -319,10 +356,35 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	if err := r.client.DeleteUser(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer()); err != nil {
+	targetName := ""
+	if !state.ID.IsNull() && !state.ID.IsUnknown() {
+		targetName = state.ID.ValueString()
+	}
+	if targetName == "" && !state.Name.IsNull() && !state.Name.IsUnknown() {
+		targetName = state.Name.ValueString()
+	}
+	if targetName == "" {
+		resp.Diagnostics.AddError("Error Deleting ClickHouse User", "state was missing both id and name identifiers")
+		return
+	}
+
+	if err := r.client.DeleteUser(ctx, targetName, optionalStringPointer(state.ClusterName)); err != nil {
 		resp.Diagnostics.AddError("Error Deleting ClickHouse User", fmt.Sprintf("%+v\n", err))
 		return
 	}
+}
+
+func optionalStringPointer(v types.String) *string {
+	if v.IsNull() || v.IsUnknown() {
+		return nil
+	}
+
+	value := v.ValueString()
+	if value == "" {
+		return nil
+	}
+
+	return &value
 }
 
 func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
