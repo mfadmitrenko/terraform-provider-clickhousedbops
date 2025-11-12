@@ -7,12 +7,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 )
@@ -49,10 +51,27 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				},
 			},
 			"settings_profile_id": schema.StringAttribute{
-				Required:    true,
+				Optional:    true,
+				Computed:    true,
 				Description: "ID of the settings profile to associate",
 				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ExactlyOneOf(path.MatchRoot("settings_profile_name")),
+				},
+			},
+			"settings_profile_name": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "Name of the settings profile to associate",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ExactlyOneOf(path.MatchRoot("settings_profile_id")),
 				},
 			},
 			"role_id": schema.StringAttribute{
@@ -131,7 +150,12 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	err := r.client.AssociateSettingsProfile(ctx, plan.SettingsProfileID.ValueString(), plan.RoleID.ValueStringPointer(), plan.UserID.ValueStringPointer(), plan.ClusterName.ValueStringPointer())
+	profile, err := r.resolveSettingsProfile(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err = r.client.AssociateSettingsProfile(ctx, profile.ID, plan.RoleID.ValueStringPointer(), plan.UserID.ValueStringPointer(), plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Associating Settings Profile to Role",
@@ -142,10 +166,11 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	state := SettingsProfileAssociation{
-		ClusterName:       plan.ClusterName,
-		SettingsProfileID: plan.SettingsProfileID,
-		RoleID:            plan.RoleID,
-		UserID:            plan.UserID,
+		ClusterName:         plan.ClusterName,
+		SettingsProfileID:   types.StringValue(profile.ID),
+		SettingsProfileName: types.StringValue(profile.Name),
+		RoleID:              plan.RoleID,
+		UserID:              plan.UserID,
 	}
 
 	diags = resp.State.Set(ctx, state)
@@ -164,7 +189,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	}
 
 	// Get settings profile.
-	settingsProfile, err := r.client.GetSettingsProfile(ctx, state.SettingsProfileID.ValueString(), state.ClusterName.ValueStringPointer())
+	settingsProfile, err := r.getSettingsProfile(ctx, &state)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Getting Settings Profile",
@@ -178,6 +203,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		resp.State.RemoveResource(ctx)
 		return
 	}
+
+	state.SettingsProfileID = types.StringValue(settingsProfile.ID)
+	state.SettingsProfileName = types.StringValue(settingsProfile.Name)
 
 	if !state.RoleID.IsUnknown() && !state.RoleID.IsNull() {
 		role, err := r.client.GetRole(ctx, state.RoleID.ValueString(), state.ClusterName.ValueStringPointer())
@@ -231,7 +259,26 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.DisassociateSettingsProfile(ctx, state.SettingsProfileID.ValueString(), state.RoleID.ValueStringPointer(), state.UserID.ValueStringPointer(), state.ClusterName.ValueStringPointer())
+	profileID := state.SettingsProfileID.ValueString()
+	if profileID == "" {
+		settingsProfile, err := r.getSettingsProfile(ctx, &state)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error Looking Up Settings Profile",
+				fmt.Sprintf("%+v\n", err),
+			)
+			return
+		}
+
+		if settingsProfile == nil {
+			// Profile already gone, so association is gone as well.
+			return
+		}
+
+		profileID = settingsProfile.ID
+	}
+
+	err := r.client.DisassociateSettingsProfile(ctx, profileID, state.RoleID.ValueStringPointer(), state.UserID.ValueStringPointer(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting ClickHouse SettingsProfileAssociation",
@@ -239,4 +286,73 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		)
 		return
 	}
+}
+
+func (r *Resource) resolveSettingsProfile(ctx context.Context, plan *SettingsProfileAssociation, diags *diag.Diagnostics) (*dbops.SettingsProfile, error) {
+	clusterName := plan.ClusterName.ValueStringPointer()
+
+	if !plan.SettingsProfileID.IsNull() && !plan.SettingsProfileID.IsUnknown() {
+		profile, err := r.client.GetSettingsProfile(ctx, plan.SettingsProfileID.ValueString(), clusterName)
+		if err != nil {
+			diags.AddError(
+				"Error Looking Up Settings Profile",
+				fmt.Sprintf("%+v\n", err),
+			)
+			return nil, err
+		}
+
+		if profile == nil {
+			diags.AddAttributeError(
+				path.Root("settings_profile_id"),
+				"Settings Profile Not Found",
+				fmt.Sprintf("Settings profile with ID %q was not found", plan.SettingsProfileID.ValueString()),
+			)
+			return nil, fmt.Errorf("settings profile %s not found", plan.SettingsProfileID.ValueString())
+		}
+
+		return profile, nil
+	}
+
+	if !plan.SettingsProfileName.IsNull() && !plan.SettingsProfileName.IsUnknown() {
+		profile, err := r.client.GetSettingsProfileByName(ctx, plan.SettingsProfileName.ValueString(), clusterName)
+		if err != nil {
+			diags.AddError(
+				"Error Looking Up Settings Profile",
+				fmt.Sprintf("%+v\n", err),
+			)
+			return nil, err
+		}
+
+		if profile == nil {
+			diags.AddAttributeError(
+				path.Root("settings_profile_name"),
+				"Settings Profile Not Found",
+				fmt.Sprintf("Settings profile with name %q was not found", plan.SettingsProfileName.ValueString()),
+			)
+			return nil, fmt.Errorf("settings profile %s not found", plan.SettingsProfileName.ValueString())
+		}
+
+		return profile, nil
+	}
+
+	diags.AddError(
+		"Missing Settings Profile Reference",
+		"Either settings_profile_id or settings_profile_name must be provided.",
+	)
+
+	return nil, fmt.Errorf("settings profile reference not provided")
+}
+
+func (r *Resource) getSettingsProfile(ctx context.Context, state *SettingsProfileAssociation) (*dbops.SettingsProfile, error) {
+	clusterName := state.ClusterName.ValueStringPointer()
+
+	if !state.SettingsProfileID.IsNull() && !state.SettingsProfileID.IsUnknown() && state.SettingsProfileID.ValueString() != "" {
+		return r.client.GetSettingsProfile(ctx, state.SettingsProfileID.ValueString(), clusterName)
+	}
+
+	if !state.SettingsProfileName.IsNull() && !state.SettingsProfileName.IsUnknown() && state.SettingsProfileName.ValueString() != "" {
+		return r.client.GetSettingsProfileByName(ctx, state.SettingsProfileName.ValueString(), clusterName)
+	}
+
+	return nil, nil
 }

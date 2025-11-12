@@ -35,11 +35,21 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 
 	checkNotExistsFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error) {
 		settingsProfileID := attrs["settings_profile_id"]
-		if settingsProfileID == "" {
-			return false, fmt.Errorf("settings_profile_id attribute was not set")
+		settingsProfileName := attrs["settings_profile_name"]
+		if settingsProfileID == "" && settingsProfileName == "" {
+			return false, fmt.Errorf("settings profile reference attributes were not set")
 		}
 
-		settingsProfile, err := dbopsClient.GetSettingsProfile(ctx, settingsProfileID, clusterName)
+		var (
+			settingsProfile *dbops.SettingsProfile
+			err             error
+		)
+
+		if settingsProfileID != "" {
+			settingsProfile, err = dbopsClient.GetSettingsProfile(ctx, settingsProfileID, clusterName)
+		} else {
+			settingsProfile, err = dbopsClient.GetSettingsProfileByName(ctx, settingsProfileName, clusterName)
+		}
 		if err != nil {
 			return false, fmt.Errorf("cannot find settings profile")
 		}
@@ -94,15 +104,33 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 	}
 
 	checkAttributesFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
-		settingsProfileID := attrs["settings_profile_id"]
-		if settingsProfileID == nil {
-			return fmt.Errorf("settings_profile_id attribute was not set")
+		var settingsProfileID string
+		if raw := attrs["settings_profile_id"]; raw != nil {
+			settingsProfileID = raw.(string)
+		}
+
+		var settingsProfileName string
+		if raw := attrs["settings_profile_name"]; raw != nil {
+			settingsProfileName = raw.(string)
+		}
+
+		if settingsProfileID == "" && settingsProfileName == "" {
+			return fmt.Errorf("settings profile reference attributes were not set")
 		}
 
 		roleID := attrs["role_id"]
 		userID := attrs["user_id"]
 
-		settingsProfile, err := dbopsClient.GetSettingsProfile(ctx, settingsProfileID.(string), clusterName)
+		var (
+			settingsProfile *dbops.SettingsProfile
+			err             error
+		)
+
+		if settingsProfileID != "" {
+			settingsProfile, err = dbopsClient.GetSettingsProfile(ctx, settingsProfileID, clusterName)
+		} else {
+			settingsProfile, err = dbopsClient.GetSettingsProfileByName(ctx, settingsProfileName, clusterName)
+		}
 		if err != nil {
 			return fmt.Errorf("cannot find settings profile")
 		}
@@ -174,6 +202,21 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
+				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
+				AddDependency(user.Build()).
+				AddDependency(settingsProfile.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Assign settings profile to user by name using HTTP protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "http",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithResourceFieldReference("settings_profile_name", "clickhousedbops_settings_profile", "profile1", "name").
 				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
 				AddDependency(user.Build()).
 				AddDependency(settingsProfile.Build()).
