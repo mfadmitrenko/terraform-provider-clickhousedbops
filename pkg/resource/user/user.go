@@ -299,6 +299,10 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		// DefaultRole changes are not handled via ALTER; keep as is for now.
 	}
 
+	if !plan.SettingsProfile.IsNull() && !plan.SettingsProfile.IsUnknown() {
+		u.SettingsProfile = plan.SettingsProfile.ValueString()
+	}
+
 	updated, err := r.client.UpdateUser(ctx, u, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Updating ClickHouse User", fmt.Sprintf("%+v\n", err))

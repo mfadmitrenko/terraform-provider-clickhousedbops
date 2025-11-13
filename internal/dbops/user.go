@@ -214,13 +214,26 @@ func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (
 	// Only rename if the target name actually differs
 	wantsRename := user.Name != existing.Name
 
-	if !wantsRename {
+	var wantsSettingsProfile bool
+	var desiredProfile *string
+	if user.SettingsProfile != "" && !existing.HasSettingProfile(user.SettingsProfile) {
+		wantsSettingsProfile = true
+		p := user.SettingsProfile
+		desiredProfile = &p
+	}
+
+	if !wantsRename && !wantsSettingsProfile {
 		// No changes (since we don't alter other props via ALTER yet)
 		return existing, nil
 	}
 
 	q := querybuilder.NewAlterUser(existing.Name).WithCluster(clusterName)
-	q = q.RenameTo(&user.Name)
+	if wantsRename {
+		q = q.RenameTo(&user.Name)
+	}
+	if wantsSettingsProfile {
+		q = q.SetSettingsProfile(desiredProfile)
+	}
 
 	sql, err := q.Build()
 	if err != nil {

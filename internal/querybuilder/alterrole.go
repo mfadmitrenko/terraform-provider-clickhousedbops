@@ -89,13 +89,18 @@ func (q *alterRoleQueryBuilder) Build() (string, error) {
 	}
 
 	// Profiles
-	if q.oldSettingsProfile != nil && (q.newSettingsProfile == nil || *q.oldSettingsProfile != *q.newSettingsProfile) {
+	if q.setSettingsProfile != nil {
 		anyChanges = true
-		tokens = append(tokens, "DROP", "PROFILES", quote(*q.oldSettingsProfile))
-	}
-	if q.newSettingsProfile != nil && (q.oldSettingsProfile == nil || *q.newSettingsProfile != *q.oldSettingsProfile) {
-		anyChanges = true
-		tokens = append(tokens, "ADD", "PROFILE", quote(*q.newSettingsProfile))
+		tokens = append(tokens, "SETTINGS", "PROFILE", quote(*q.setSettingsProfile))
+	} else {
+		if q.oldSettingsProfile != nil && (q.newSettingsProfile == nil || *q.oldSettingsProfile != *q.newSettingsProfile) {
+			anyChanges = true
+			tokens = append(tokens, "DROP", "PROFILES", quote(*q.oldSettingsProfile))
+		}
+		if q.newSettingsProfile != nil && (q.oldSettingsProfile == nil || *q.newSettingsProfile != *q.oldSettingsProfile) {
+			anyChanges = true
+			tokens = append(tokens, "ADD", "PROFILE", quote(*q.newSettingsProfile))
+		}
 	}
 
 	if !anyChanges {

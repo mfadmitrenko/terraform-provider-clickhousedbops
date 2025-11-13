@@ -9,6 +9,7 @@ func Test_alterUserQueryBuilder_Build(t *testing.T) {
 		name               string
 		oldSettingsProfile *string
 		newSettingsProfile *string
+		setSettingsProfile *string
 		newName            *string
 		clusterName        *string
 		want               string
@@ -73,6 +74,19 @@ func Test_alterUserQueryBuilder_Build(t *testing.T) {
 			want:    "",
 			wantErr: true,
 		},
+		{
+			name:               "Set profile legacy syntax",
+			setSettingsProfile: strPtr("legacy"),
+			want:               "ALTER USER `foo` SETTINGS PROFILE 'legacy';",
+			wantErr:            false,
+		},
+		{
+			name:               "Set profile legacy syntax on cluster",
+			setSettingsProfile: strPtr("legacy"),
+			clusterName:        strPtr("cluster1"),
+			want:               "ALTER USER `foo` ON CLUSTER 'cluster1' SETTINGS PROFILE 'legacy';",
+			wantErr:            false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -80,6 +94,7 @@ func Test_alterUserQueryBuilder_Build(t *testing.T) {
 				resourceName:       "foo",
 				oldSettingsProfile: tt.oldSettingsProfile,
 				newSettingsProfile: tt.newSettingsProfile,
+				setSettingsProfile: tt.setSettingsProfile,
 				newName:            tt.newName,
 				clusterName:        tt.clusterName,
 			}
