@@ -215,7 +215,6 @@ func (i *impl) getDefaultRoles(ctx context.Context, userName string, clusterName
 		}
 		return nil
 	})
-
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running SELECT query")
 	}
