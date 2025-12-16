@@ -2,6 +2,8 @@ package dbops
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/pingcap/errors"
 
@@ -36,6 +38,13 @@ func (i *impl) GrantRole(ctx context.Context, grantRole GrantRole, clusterName *
 	err = i.clickhouseClient.Exec(ctx, sql)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running query")
+	}
+
+	// Activate role as DEFAULT ROLE if grantee is a user (not a role)
+	if grantRole.GranteeUserName != nil {
+		if err := i.activateDefaultRole(ctx, *grantRole.GranteeUserName, grantRole.RoleName, clusterName); err != nil {
+			return nil, errors.WithMessage(err, "error activating default role")
+		}
 	}
 
 	return i.GetGrantRole(ctx, grantRole.RoleName, grantRole.GranteeUserName, grantRole.GranteeRoleName, clusterName)
@@ -129,4 +138,113 @@ func (i *impl) RevokeGrantRole(ctx context.Context, grantedRoleName string, gran
 	}
 
 	return nil
+}
+
+// activateDefaultRole adds the role to user's default roles using ALTER USER DEFAULT ROLE
+func (i *impl) activateDefaultRole(ctx context.Context, userName string, roleName string, clusterName *string) error {
+	// Get current default roles
+	currentRoles, err := i.getDefaultRoles(ctx, userName, clusterName)
+	if err != nil {
+		return errors.WithMessage(err, "error getting current default roles")
+	}
+
+	// Check if role is already in default roles
+	for _, role := range currentRoles {
+		if role == roleName {
+			// Role is already a default role, nothing to do
+			return nil
+		}
+	}
+
+	// Add the new role to the list
+	currentRoles = append(currentRoles, roleName)
+
+	// Build ALTER USER DEFAULT ROLE query
+	sql := buildAlterUserDefaultRoleSQL(userName, currentRoles, clusterName)
+
+	// Execute the query
+	if err := i.clickhouseClient.Exec(ctx, sql); err != nil {
+		return errors.WithMessage(err, "error executing ALTER USER DEFAULT ROLE")
+	}
+
+	return nil
+}
+
+// getDefaultRoles retrieves current default roles for a user from system.users
+func (i *impl) getDefaultRoles(ctx context.Context, userName string, clusterName *string) ([]string, error) {
+	// Use toString() to convert Array(String) to string representation
+	sql, err := querybuilder.
+		NewSelect(
+			[]querybuilder.Field{querybuilder.NewField("default_roles").ToString()},
+			"system.users",
+		).
+		WithCluster(clusterName).
+		Where(querybuilder.WhereEquals("name", userName)).
+		Build()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building SELECT query")
+	}
+
+	var roles []string
+	found := false
+	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+		found = true
+		// default_roles is an Array(String) in ClickHouse, converted to string via toString()
+		rolesValue, err := data.GetNullableString("default_roles")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning default_roles field")
+		}
+		if rolesValue == nil || *rolesValue == "" {
+			return nil // No default roles
+		}
+
+		// Parse the array string format from ClickHouse toString()
+		// ClickHouse toString() returns arrays as ['role1','role2'] or [] for empty
+		rolesStr := strings.Trim(*rolesValue, "[]")
+		if rolesStr == "" {
+			return nil
+		}
+
+		// Split by comma and clean up quotes
+		parts := strings.Split(rolesStr, ",")
+		for _, part := range parts {
+			role := strings.Trim(strings.TrimSpace(part), "'\"")
+			if role != "" {
+				roles = append(roles, role)
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, errors.WithMessage(err, "error running SELECT query")
+	}
+
+	if !found {
+		// User not found, return empty roles list
+		return []string{}, nil
+	}
+
+	return roles, nil
+}
+
+// buildAlterUserDefaultRoleSQL builds ALTER USER ... DEFAULT ROLE SQL query
+func buildAlterUserDefaultRoleSQL(userName string, roles []string, clusterName *string) string {
+	// Quote role names
+	quotedRoles := make([]string, 0, len(roles))
+	for _, role := range roles {
+		quotedRoles = append(quotedRoles, fmt.Sprintf("`%s`", role))
+	}
+
+	sql := fmt.Sprintf(
+		"ALTER USER `%s` DEFAULT ROLE %s",
+		userName,
+		strings.Join(quotedRoles, ", "),
+	)
+
+	if clusterName != nil {
+		sql += fmt.Sprintf(" ON CLUSTER %s", *clusterName)
+	}
+
+	return sql + ";"
 }
