@@ -4,7 +4,6 @@ page_title: "clickhousedbops_grant_role Resource - clickhousedbops"
 subcategory: ""
 description: |-
   You can use the clickhousedbops_grant_role resource to grant a clickhousedbops_role to either a clickhousedbops_user or to another clickhousedbops_role.
-  When granting a role to a user, the role is automatically activated as a DEFAULT ROLE for that user.
   Known limitations:
   It's not possible to grant the same clickhousedbops_role to both a clickhousedbops_user and a clickhousedbops_role using a single clickhousedbops_grant_role stanza. You can do that using two different stanzas, one with grantee_user_name and the other with grantee_role_name fields set.Importing clickhousedbops_grant_role resources into terraform is not supported.
 ---
@@ -12,8 +11,6 @@ description: |-
 # clickhousedbops_grant_role (Resource)
 
 You can use the `clickhousedbops_grant_role` resource to grant a `clickhousedbops_role` to either a `clickhousedbops_user` or to another `clickhousedbops_role`.
-
-When granting a role to a user (not to another role), the role is automatically activated as a DEFAULT ROLE for that user using `ALTER USER username DEFAULT ROLE`. This ensures that the granted role is immediately available to the user without requiring manual activation.
 
 Known limitations:
 

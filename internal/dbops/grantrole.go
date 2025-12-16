@@ -42,9 +42,9 @@ func (i *impl) GrantRole(ctx context.Context, grantRole GrantRole, clusterName *
 
 	// Activate role as DEFAULT ROLE if grantee is a user (not a role)
 	if grantRole.GranteeUserName != nil {
-		if err := i.activateDefaultRole(ctx, *grantRole.GranteeUserName, grantRole.RoleName, clusterName); err != nil {
-			return nil, errors.WithMessage(err, "error activating default role")
-		}
+		// Try to activate as default role, but don't fail if it doesn't work
+		// The role is still granted successfully even if activation fails
+		_ = i.activateDefaultRole(ctx, *grantRole.GranteeUserName, grantRole.RoleName, clusterName)
 	}
 
 	return i.GetGrantRole(ctx, grantRole.RoleName, grantRole.GranteeUserName, grantRole.GranteeRoleName, clusterName)
@@ -145,7 +145,9 @@ func (i *impl) activateDefaultRole(ctx context.Context, userName string, roleNam
 	// Get current default roles
 	currentRoles, err := i.getDefaultRoles(ctx, userName, clusterName)
 	if err != nil {
-		return errors.WithMessage(err, "error getting current default roles")
+		// If we can't get default roles (e.g., user doesn't exist yet), skip activation
+		// The role is still granted, just not activated as default
+		return nil
 	}
 
 	// Check if role is already in default roles
@@ -164,6 +166,8 @@ func (i *impl) activateDefaultRole(ctx context.Context, userName string, roleNam
 
 	// Execute the query
 	if err := i.clickhouseClient.Exec(ctx, sql); err != nil {
+		// If ALTER USER fails, return error but don't fail the entire grant operation
+		// The role is still granted, just not activated as default
 		return errors.WithMessage(err, "error executing ALTER USER DEFAULT ROLE")
 	}
 
@@ -190,17 +194,27 @@ func (i *impl) getDefaultRoles(ctx context.Context, userName string, clusterName
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
 		found = true
 		// default_roles is an Array(String) in ClickHouse, converted to string via toString()
-		rolesValue, err := data.GetNullableString("default_roles")
+		// toString() always returns a string, even for empty arrays (returns "[]")
+		rolesValue, err := data.GetString("default_roles")
 		if err != nil {
-			return errors.WithMessage(err, "error scanning default_roles field")
+			// Try nullable string as fallback
+			rolesValuePtr, err2 := data.GetNullableString("default_roles")
+			if err2 != nil {
+				return errors.WithMessage(err, "error scanning default_roles field")
+			}
+			if rolesValuePtr == nil || *rolesValuePtr == "" {
+				return nil // No default roles
+			}
+			rolesValue = *rolesValuePtr
 		}
-		if rolesValue == nil || *rolesValue == "" {
+
+		if rolesValue == "" || rolesValue == "[]" {
 			return nil // No default roles
 		}
 
 		// Parse the array string format from ClickHouse toString()
 		// ClickHouse toString() returns arrays as ['role1','role2'] or [] for empty
-		rolesStr := strings.Trim(*rolesValue, "[]")
+		rolesStr := strings.Trim(rolesValue, "[]")
 		if rolesStr == "" {
 			return nil
 		}
