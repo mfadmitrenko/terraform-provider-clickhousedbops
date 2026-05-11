@@ -3,8 +3,11 @@ package provider
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"net"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -12,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	tfresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
@@ -35,6 +39,10 @@ const (
 
 	authStrategyPassword  = "password"
 	authStrategyBasicAuth = "basicauth"
+
+	defaultInitAttempts = 4
+	defaultInitBackoff  = 2 * time.Second
+	maxInitRetryBackoff = 10 * time.Second
 )
 
 var (
@@ -114,7 +122,6 @@ func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp 
 
 func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var data Model
-	var err error
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
@@ -127,7 +134,71 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
+	clickhouseClient, err := p.newClickhouseClientWithRetry(ctx, data)
+	if err != nil {
+		resp.Diagnostics.AddError("error initializing clickhouse client", fmt.Sprintf("%+v\n", err))
+		return
+	}
+
+	dbopsClient, err := dbops.NewClient(clickhouseClient)
+	if err != nil {
+		resp.Diagnostics.AddError("error initializing dbops client", fmt.Sprintf("%+v\n", err))
+		return
+	}
+
+	resp.ResourceData = dbopsClient
+	resp.DataSourceData = dbopsClient
+}
+
+func (p *Provider) newClickhouseClientWithRetry(ctx context.Context, data Model) (clickhouseclient.ClickhouseClient, error) {
+	var lastErr error
+
+	for attempt := 1; attempt <= defaultInitAttempts; attempt++ {
+		client, err := p.newClickhouseClient(data)
+		if err == nil {
+			return client, nil
+		}
+
+		if !isRetryableInitError(err) {
+			return nil, err
+		}
+
+		lastErr = err
+		if attempt == defaultInitAttempts {
+			break
+		}
+
+		backoff := defaultInitBackoff * time.Duration(attempt)
+		if backoff > maxInitRetryBackoff {
+			backoff = maxInitRetryBackoff
+		}
+
+		tflog.Warn(ctx, "clickhouse client initialization failed, retrying", map[string]any{
+			"attempt":      attempt,
+			"max_attempts": defaultInitAttempts,
+			"retry_in":     backoff.String(),
+			"error":        err.Error(),
+		})
+
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, fmt.Errorf("initialization cancelled while waiting to retry: %w", ctx.Err())
+		case <-timer.C:
+		}
+	}
+
+	return nil, fmt.Errorf(
+		"clickhouse client initialization failed after %d attempts: %w",
+		defaultInitAttempts,
+		lastErr,
+	)
+}
+
+func (p *Provider) newClickhouseClient(data Model) (clickhouseclient.ClickhouseClient, error) {
 	var clickhouseClient clickhouseclient.ClickhouseClient
+	var err error
 	{
 		switch data.Protocol.ValueString() {
 		case protocolNative:
@@ -146,11 +217,10 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 
 				valid, errorStrings := auth.ValidateConfig()
 				if !valid {
-					resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid authentication strategy configuration. %s", strings.Join(errorStrings, ", ")))
+					return nil, fmt.Errorf("invalid configuration: invalid authentication strategy configuration. %s", strings.Join(errorStrings, ", "))
 				}
 			default:
-				resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid authentication strategy %q. %s protocol only supports %q", data.AuthConfig.Strategy, protocolNative, authStrategyPassword))
-				return
+				return nil, fmt.Errorf("invalid configuration: invalid authentication strategy %q. %s protocol only supports %q", data.AuthConfig.Strategy, protocolNative, authStrategyPassword)
 			}
 
 			var port uint16
@@ -158,8 +228,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				if !data.Port.IsUnknown() {
 					portVal := data.Port.ValueInt32()
 					if portVal <= 0 || portVal > 65535 {
-						resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid port %s.", data.Port.String()))
-						return
+						return nil, fmt.Errorf("invalid configuration: invalid port %s", data.Port.String())
 					}
 
 					port = uint16(portVal)
@@ -188,11 +257,10 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 
 				valid, errorStrings := auth.ValidateConfig()
 				if !valid {
-					resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid authentication strategy configuration. %s", strings.Join(errorStrings, ", ")))
+					return nil, fmt.Errorf("invalid configuration: invalid authentication strategy configuration. %s", strings.Join(errorStrings, ", "))
 				}
 			default:
-				resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid authentication strategy %q. %s protocol only supports %q", data.AuthConfig.Strategy, protocolHTTP, authStrategyBasicAuth))
-				return
+				return nil, fmt.Errorf("invalid configuration: invalid authentication strategy %q. %s protocol only supports %q", data.AuthConfig.Strategy, protocolHTTP, authStrategyBasicAuth)
 			}
 
 			var port uint16
@@ -200,8 +268,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				if !data.Port.IsUnknown() {
 					portVal := data.Port.ValueInt32()
 					if portVal <= 0 || portVal > 65535 {
-						resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid port %s.", data.Port.String()))
-						return
+						return nil, fmt.Errorf("invalid configuration: invalid port %s", data.Port.String())
 					}
 
 					port = uint16(portVal)
@@ -227,22 +294,39 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 			}
 
 			clickhouseClient, err = clickhouseclient.NewHTTPClient(config)
+		default:
+			return nil, fmt.Errorf("invalid configuration: unsupported protocol %q", data.Protocol.ValueString())
 		}
 	}
 
-	if err != nil {
-		resp.Diagnostics.AddError("error initializing clickhouse client", fmt.Sprintf("%+v\n", err))
-		return
+	return clickhouseClient, err
+}
+
+func isRetryableInitError(err error) bool {
+	var netErr net.Error
+	if ok := errors.As(err, &netErr); ok {
+		return true
 	}
 
-	dbopsClient, err := dbops.NewClient(clickhouseClient)
-	if err != nil {
-		resp.Diagnostics.AddError("error initializing dbops client", fmt.Sprintf("%+v\n", err))
-		return
+	errString := strings.ToLower(err.Error())
+	retryableSubstrings := []string{
+		"connection refused",
+		"connection reset",
+		"i/o timeout",
+		"timeout",
+		"temporary failure",
+		"no route to host",
+		"broken pipe",
+		"eof",
 	}
 
-	resp.ResourceData = dbopsClient
-	resp.DataSourceData = dbopsClient
+	for _, candidate := range retryableSubstrings {
+		if strings.Contains(errString, candidate) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (p *Provider) Resources(ctx context.Context) []func() tfresource.Resource {
