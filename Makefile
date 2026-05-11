@@ -37,7 +37,11 @@ tftest:
 ifeq ($(strip $(RESOURCE)),)
 	$(error RESOURCE variable is required and cannot be empty. Usage: make tftest RESOURCE=user)
 endif
-	TF_ACC=1 go test -p 1 -parallel=1 -v -run Test.*_acceptance ./pkg/resource/$(RESOURCE)
+	@if ! command -v terraform >/dev/null 2>&1; then \
+		echo "terraform binary not found in PATH. Install terraform or set TF_ACC_TERRAFORM_PATH."; \
+		exit 1; \
+	fi
+	TF_ACC=1 TF_ACC_TERRAFORM_PATH="$$(command -v terraform)" go test -p 1 -parallel=1 -v -run 'Test.*_acceptance' ./pkg/resource/$(RESOURCE)
 
 enable_git_hooks: ## Add githooks for code validation before commit, as symlink so they get updated automatically
 	mkdir -p .git/hooks

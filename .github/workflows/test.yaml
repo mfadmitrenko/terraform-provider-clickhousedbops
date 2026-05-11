@@ -20,6 +20,11 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.11.3
+
       - name: Run go tests
         run: make test
 
@@ -53,6 +58,11 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.11.3
 
       - name: Run terraform acceptance tests
         run: make tftest RESOURCE=${{ matrix.resource }}
